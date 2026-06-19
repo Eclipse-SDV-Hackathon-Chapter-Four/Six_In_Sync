@@ -7,20 +7,16 @@
  * 
  *  SPDX-License-Identifier: MIT
  * 
- *  Contributors: 
+ *  Contributors:
  *     Ali Eissa - 2026 version.
  */
 
-#ifndef _ETHERNET_PHY_H
-#define _ETHERNET_PHY_H
+ #ifndef NX_USER_H
+#define NX_USER_H
 
-#include "stm32f7xx_hal.h"
+#define NX_DISABLE_IPV6
+#define NX_ENABLE_INTERFACE_CAPABILITY
+#define NX_PHYSICAL_HEADER 16
+#define NX_ENABLE_EXTENDED_NOTIFY_SUPPORT
 
-/* Global Ethernet Handle */
-extern ETH_HandleTypeDef heth;
-extern ETH_TxPacketConfig TxConfig;
-
-/* Function Prototypes */
-void ethernet_phy_init(void);
-
-#endif // _ETHERNET_PHY_H
+#endif /* NX_USER_H */
