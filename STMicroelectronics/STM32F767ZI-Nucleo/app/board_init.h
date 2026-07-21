@@ -39,8 +39,13 @@ extern UART_HandleTypeDef huart3;
 /* Global Ethernet handle */
 extern ETH_HandleTypeDef heth;
 
+/* Global I2C handle */
+extern I2C_HandleTypeDef hi2c1;
+
 /* Define prototypes. */
 void board_init(void);
 void board_ethernet_init(void);
+void board_i2c_init(void);
+
 
 #endif // _BOARD_INIT_H

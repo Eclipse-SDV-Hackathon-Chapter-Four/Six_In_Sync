@@ -98,6 +98,7 @@ Copy-Item -Path "$TempDir/Middlewares/ST/netxduo/common/drivers/ethernet/nx_stm3
 Copy-Item -Path "$TempDir/Middlewares/ST/netxduo/common/drivers/ethernet/nx_stm32_eth_driver.h" -Destination $NetxDriverDest -Force
 Copy-Item -Path "$TempDir/Middlewares/ST/netxduo/common/drivers/ethernet/lan8742/nx_stm32_phy_driver.c" -Destination $NetxDriverDest -Force
 Copy-Item -Path "$TempDir/Middlewares/ST/netxduo/common/drivers/ethernet/nx_stm32_phy_driver.h" -Destination $NetxDriverDest -Force
+Copy-Item -Path "$TempDir/Projects/STM32F767ZI-Nucleo/Applications/NetXDuo/Nx_TCP_Echo_Client/NetXDuo/Target/nx_stm32_eth_config.h" -Destination $NetxDriverDest -Force
 
 # ST modified the HAL ETH driver to match the new H7-style API for NetX Duo, so we must overwrite the default ones
 Copy-Item -Path "$TempDir/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c" -Destination "$HalDest/Src" -Force

@@ -16,6 +16,7 @@
 #include "tx_api.h"
 #include <string.h>
 #include <stdio.h>
+#include "ansi_colors.h"
 
 /* Global UART handler */
 UART_HandleTypeDef huart3;
@@ -53,6 +54,9 @@ void board_init(void)
 
     /* Initialize USART3 console */
     MX_USART3_UART_Init();
+
+    /* Initialize I2C1 for environmental sensors */
+    board_i2c_init();
 }
 
 /**
@@ -261,19 +265,26 @@ void board_ethernet_init(void)
     heth.Init.RxDesc = DMARxDscrTab;
     heth.Init.RxBuffLen = 1524;
 
-    printf("[HAL] Calling HAL_ETH_Init...\r\n");
+    printf(TAG_HAL " " MSG_INFO "Calling HAL_ETH_Init...\r\n" ANSI_RESET);
     HAL_StatusTypeDef status = HAL_ETH_Init(&heth);
-    printf("[HAL] HAL_ETH_Init returned status: %d\r\n", status);
+    if (status == HAL_OK)
+    {
+        printf(TAG_HAL " " MSG_SUCCESS "HAL_ETH_Init succeeded (status: %d)\r\n" ANSI_RESET, status);
+    }
+    else
+    {
+        printf(TAG_HAL " " MSG_ERROR "HAL_ETH_Init failed (status: %d)\r\n" ANSI_RESET, status);
+    }
 
     /* Initialize the PHY transceiver and wait for the link to be established.
        This ensures that when NetX Duo enables the interface during startup,
        the hardware link is already up, avoiding driver initialization failures. */
     extern int32_t nx_eth_phy_init(void);
     extern int32_t nx_eth_phy_get_link_state(void);
-    printf("[NetX] Initializing PHY transceiver...\r\n");
+    printf(TAG_NETWORK " " MSG_INFO "Initializing PHY transceiver...\r\n" ANSI_RESET);
     if (nx_eth_phy_init() == 0)
     {
-        printf("[NetX] Waiting for Ethernet link (max 3s)...\r\n");
+        printf(TAG_NETWORK " " MSG_WARNING "Waiting for Ethernet link (max 3s)...\r\n" ANSI_RESET);
         uint32_t retries = 300; /* 300 * 10ms = 3 seconds */
         while (nx_eth_phy_get_link_state() <= 1)
         {
@@ -281,13 +292,13 @@ void board_ethernet_init(void)
             retries--;
             if (retries == 0)
             {
-                printf("[NetX] Ethernet link timeout! Cable connected?\r\n");
+                printf(TAG_NETWORK " " MSG_ERROR "Ethernet link timeout! Cable connected?\r\n" ANSI_RESET);
                 break;
             }
         }
         if (nx_eth_phy_get_link_state() > 1)
         {
-            printf("[NetX] Ethernet link up!\r\n");
+            printf(TAG_NETWORK " " MSG_SUCCESS "Ethernet link up!\r\n" ANSI_RESET);
         }
     }
     else
@@ -300,10 +311,11 @@ void board_ethernet_init(void)
    both before and after the ThreadX scheduler starts. */
 uint32_t HAL_GetTick(void)
 {
-    /* If the ThreadX scheduler is running, use the ThreadX time */
+    /* If the ThreadX scheduler is running, use the ThreadX time converted to milliseconds.
+       Perform intermediate multiplication in 64-bit space to prevent early integer overflow. */
     if (tx_thread_identify() != TX_NULL)
     {
-        return (uint32_t)tx_time_get();
+        return (uint32_t)(((uint64_t)tx_time_get() * 1000) / TX_TIMER_TICKS_PER_SECOND);
     }
     else
     {
@@ -324,3 +336,37 @@ uint32_t HAL_GetTick(void)
         return ms_ticks;
     }
 }
+
+/* Global I2C handler */
+I2C_HandleTypeDef hi2c1;
+
+void board_i2c_init(void)
+{
+    hi2c1.Instance = I2C1;
+    hi2c1.Init.Timing = 0x20404768; /* 100 kHz standard mode timing value at 54 MHz I2C clock */
+    hi2c1.Init.OwnAddress1 = 0;
+    hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+    hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+    hi2c1.Init.OwnAddress2 = 0;
+    hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+    hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+    hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+
+    if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    /* Configure Analogue filter */
+    if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    /* Configure Digital filter */
+    if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+    {
+        Error_Handler();
+    }
+}
+

@@ -14,6 +14,7 @@
 #include "board_init.h"
 #include "tx_api.h"
 #include <stdio.h>
+#include "ansi_colors.h"
 
 /* --- ThreadX Resource Definitions --- */
 
@@ -138,9 +139,9 @@ void green_thread_entry(ULONG thread_input)
 {
     (void)thread_input;
     
-    printf("\r\n==========================================\r\n");
-    printf("ThreadX Multitasking Edge Node Demo Booted!\r\n");
-    printf("==========================================\r\n\r\n");
+    printf(ANSI_BOLD ANSI_CYAN "\r\n==========================================\r\n" ANSI_RESET);
+    printf(ANSI_BOLD ANSI_CYAN "ThreadX Multitasking Edge Node Demo Booted!\r\n" ANSI_RESET);
+    printf(ANSI_BOLD ANSI_CYAN "==========================================\r\n\r\n" ANSI_RESET);
 
     while (1)
     {
@@ -210,7 +211,7 @@ void logger_thread_entry(ULONG thread_input)
         /* Block until a message arrives in the queue */
         if (tx_queue_receive(&msg_queue, &received_ticks, TX_WAIT_FOREVER) == TX_SUCCESS)
         {
-            printf("[LOG] Button Pressed! System Tick Count: %lu\r\n", received_ticks);
+            printf("\x1b[38;5;243m[LOG]" ANSI_RESET " " MSG_SUCCESS "Button Pressed! System Tick Count: %lu\r\n" ANSI_RESET, received_ticks);
         }
     }
 }
@@ -304,7 +305,7 @@ void input_thread_entry(ULONG thread_input)
                 if (line_index > 0)
                 {
                     line_buffer[line_index] = '\0';
-                    printf(" -> [CONSOLE] Received string: \"%s\"\r\n", line_buffer);
+                    printf(" -> \x1b[38;5;243m[CONSOLE]" ANSI_RESET " " MSG_INFO "Received string: \"%s\"\r\n" ANSI_RESET, line_buffer);
 
                     /* Flash LD3 to signal successful reception */
                     LED3_ON();

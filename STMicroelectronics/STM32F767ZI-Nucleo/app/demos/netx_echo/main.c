@@ -16,6 +16,7 @@
 #include "nx_api.h"
 #include "nxd_dhcp_client.h"
 #include <stdio.h>
+#include "ansi_colors.h"
 
 #define DEMO_STACK_SIZE         2048
 #define PACKET_SIZE             1536
@@ -48,9 +49,9 @@ void tcp_echo_thread_entry(ULONG thread_input);
 int main(void)
 {
     board_init();
-    printf("\r\n==========================================\r\n");
-    printf("NetX Echo Demo Booted!\r\n");
-    printf("==========================================\r\n\r\n");
+    printf(ANSI_BOLD ANSI_CYAN "\r\n==========================================\r\n" ANSI_RESET);
+    printf(ANSI_BOLD ANSI_CYAN "NetX Echo Demo Booted!\r\n" ANSI_RESET);
+    printf(ANSI_BOLD ANSI_CYAN "==========================================\r\n\r\n" ANSI_RESET);
 
     /* Initialize the Ethernet hardware, MAC, and wait for link to be established */
     board_ethernet_init();
@@ -68,35 +69,35 @@ void tx_application_define(void *first_unused_memory)
     /* Create the packet pool in our uncacheable section */
     if (nx_packet_pool_create(&pool_0, "NetX Main Packet Pool",
                               PACKET_SIZE, packet_pool_area, PACKET_POOL_SIZE) != NX_SUCCESS) {
-        printf("[NetX] Failed to create packet pool.\r\n");
+        printf(TAG_NETWORK " " MSG_ERROR "Failed to create packet pool.\r\n" ANSI_RESET);
         return;
     }
-    printf("[NetX] Packet pool created\r\n");
+    printf(TAG_NETWORK " " MSG_SUCCESS "Packet pool created\r\n" ANSI_RESET);
 
     /* Create the IP instance using the STM32 Ethernet driver */
     if (nx_ip_create(&ip_0, "NetX IP Instance 0", IP_ADDRESS(0, 0, 0, 0),
                      0xFFFFFF00UL, &pool_0, nx_stm32_eth_driver,
                      ip_thread_stack, DEMO_STACK_SIZE, 1) != NX_SUCCESS) {
-        printf("[NetX] Failed to create IP instance.\r\n");
+        printf(TAG_NETWORK " " MSG_ERROR "Failed to create IP instance.\r\n" ANSI_RESET);
         return;
     }
-    printf("[NetX] IP instance created\r\n");
+    printf(TAG_NETWORK " " MSG_SUCCESS "IP instance created\r\n" ANSI_RESET);
 
     /* Enable ARP, TCP, UDP, and ICMP */
-    printf("[NetX] Enabling ARP...\r\n");
+    printf(TAG_NETWORK " " MSG_INFO "Enabling ARP...\r\n" ANSI_RESET);
     nx_arp_enable(&ip_0, (VOID *)arp_cache_area, ARP_CACHE_SIZE);
-    printf("[NetX] Enabling TCP...\r\n");
+    printf(TAG_NETWORK " " MSG_INFO "Enabling TCP...\r\n" ANSI_RESET);
     nx_tcp_enable(&ip_0);
-    printf("[NetX] Enabling UDP...\r\n");
+    printf(TAG_NETWORK " " MSG_INFO "Enabling UDP...\r\n" ANSI_RESET);
     nx_udp_enable(&ip_0);
-    printf("[NetX] Enabling ICMP...\r\n");
+    printf(TAG_NETWORK " " MSG_INFO "Enabling ICMP...\r\n" ANSI_RESET);
     nx_icmp_enable(&ip_0);
 
     /* Start DHCP Thread */
-    printf("[NetX] Creating DHCP Thread...\r\n");
+    printf(TAG_NETWORK " " MSG_INFO "Creating DHCP Thread...\r\n" ANSI_RESET);
     tx_thread_create(&dhcp_thread, "DHCP Thread", dhcp_thread_entry, 0,
                      dhcp_thread_stack, DEMO_STACK_SIZE, 2, 2, TX_NO_TIME_SLICE, TX_AUTO_START);
-    printf("[NetX] tx_application_define completed\r\n");
+    printf(TAG_NETWORK " " MSG_SUCCESS "tx_application_define completed\r\n" ANSI_RESET);
 }
 
 void dhcp_thread_entry(ULONG thread_input)
@@ -111,7 +112,7 @@ void dhcp_thread_entry(ULONG thread_input)
     /* Create the DHCP client instance once */
     nx_dhcp_create(&dhcp_client, &ip_0, "DHCP Client");
 
-    printf("[NetX] Network Monitor Thread Started.\r\n");
+    printf(TAG_NETWORK " " MSG_INFO "Network Monitor Thread Started.\r\n" ANSI_RESET);
 
     while (1)
     {
@@ -123,28 +124,28 @@ void dhcp_thread_entry(ULONG thread_input)
         {
             if (curr_link_up)
             {
-                printf("[NetX] Ethernet cable connected! Enabling link...\r\n");
+                printf(TAG_NETWORK " " MSG_WARNING "Ethernet cable connected! Enabling link...\r\n" ANSI_RESET);
                 UINT status = nx_ip_driver_direct_command(&ip_0, NX_LINK_ENABLE, &actual_status);
                 if (status == NX_SUCCESS || status == NX_ALREADY_ENABLED)
                 {
-                    printf("[NetX] Ethernet link is UP! Starting DHCP client...\r\n");
+                    printf(TAG_NETWORK " " MSG_SUCCESS "Ethernet link is UP! Starting DHCP client...\r\n" ANSI_RESET);
                     nx_dhcp_start(&dhcp_client);
 
                     /* Wait up to 10 seconds for IP address resolution */
                     if (nx_ip_status_check(&ip_0, NX_IP_ADDRESS_RESOLVED, &ip_address, 1000) == NX_SUCCESS)
                     {
                         nx_ip_address_get(&ip_0, &ip_address, &network_mask);
-                        printf("[NetX] DHCP Success!\r\n");
-                        printf("[NetX] IP Address : %lu.%lu.%lu.%lu\r\n", 
+                        printf(TAG_NETWORK " " ANSI_BOLD MSG_SUCCESS "DHCP Success!\r\n" ANSI_RESET);
+                        printf(TAG_NETWORK " " MSG_SUCCESS "IP Address : %lu.%lu.%lu.%lu\r\n" ANSI_RESET, 
                                (ip_address >> 24) & 0xFF, (ip_address >> 16) & 0xFF, 
                                (ip_address >> 8) & 0xFF, ip_address & 0xFF);
-                        printf("[NetX] Subnet Mask: %lu.%lu.%lu.%lu\r\n", 
+                        printf(TAG_NETWORK " " MSG_SUCCESS "Subnet Mask: %lu.%lu.%lu.%lu\r\n" ANSI_RESET, 
                                (network_mask >> 24) & 0xFF, (network_mask >> 16) & 0xFF, 
                                (network_mask >> 8) & 0xFF, network_mask & 0xFF);
                     }
                     else
                     {
-                        printf("[NetX] DHCP Timeout! Using static IP 192.168.0.100\r\n");
+                        printf(TAG_NETWORK " " MSG_WARNING "DHCP Timeout! Using static IP 192.168.0.100\r\n" ANSI_RESET);
                         nx_dhcp_stop(&dhcp_client);
                         nx_ip_address_set(&ip_0, IP_ADDRESS(192, 168, 0, 100), 0xFFFFFF00UL);
                     }
@@ -159,12 +160,12 @@ void dhcp_thread_entry(ULONG thread_input)
                 }
                 else
                 {
-                    printf("[NetX] Failed to enable driver link: 0x%02x\r\n", status);
+                    printf(TAG_NETWORK " " MSG_ERROR "Failed to enable driver link: 0x%02x\r\n" ANSI_RESET, status);
                 }
             }
             else
             {
-                printf("[NetX] Ethernet cable disconnected! Disabling link...\r\n");
+                printf(TAG_NETWORK " " MSG_ERROR "Ethernet cable disconnected! Disabling link...\r\n" ANSI_RESET);
                 nx_dhcp_stop(&dhcp_client);
                 nx_ip_driver_direct_command(&ip_0, NX_LINK_DISABLE, &actual_status);
                 /* Reset IP address to 0.0.0.0 */
@@ -184,7 +185,7 @@ void tcp_echo_thread_entry(ULONG thread_input)
 
     nx_tcp_socket_create(&ip_0, &echo_socket, "Echo Socket", NX_IP_NORMAL, NX_FRAGMENT_OKAY, NX_IP_TIME_TO_LIVE, 512, NX_NULL, NX_NULL);
 
-    printf("[Echo] TCP Echo Server listening on port %d\r\n", ECHO_SERVER_PORT);
+    printf(TAG_ECHO " " MSG_INFO "TCP Echo Server listening on port %d\r\n" ANSI_RESET, ECHO_SERVER_PORT);
 
     while (1) {
         if (nx_tcp_server_socket_listen(&ip_0, ECHO_SERVER_PORT, &echo_socket, 5, NX_NULL) != NX_SUCCESS) {
@@ -193,14 +194,14 @@ void tcp_echo_thread_entry(ULONG thread_input)
         }
 
         if (nx_tcp_server_socket_accept(&echo_socket, NX_WAIT_FOREVER) == NX_SUCCESS) {
-            printf("[Echo] Client connected.\r\n");
+            printf(TAG_ECHO " " MSG_SUCCESS "Client connected.\r\n" ANSI_RESET);
             
             while (nx_tcp_socket_receive(&echo_socket, &packet_ptr, NX_WAIT_FOREVER) == NX_SUCCESS) {
                 /* Echo the packet back */
                 nx_tcp_socket_send(&echo_socket, packet_ptr, NX_WAIT_FOREVER);
             }
             
-            printf("[Echo] Client disconnected.\r\n");
+            printf(TAG_ECHO " " MSG_WARNING "Client disconnected.\r\n" ANSI_RESET);
             nx_tcp_socket_disconnect(&echo_socket, NX_WAIT_FOREVER);
             nx_tcp_server_socket_unaccept(&echo_socket);
         }

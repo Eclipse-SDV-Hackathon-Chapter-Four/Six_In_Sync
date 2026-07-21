@@ -87,6 +87,7 @@ cp -f "${TEMP_DIR}/Middlewares/ST/netxduo/common/drivers/ethernet/nx_stm32_eth_d
 cp -f "${TEMP_DIR}/Middlewares/ST/netxduo/common/drivers/ethernet/nx_stm32_eth_driver.h" "${NETX_DRIVER_DEST}/"
 cp -f "${TEMP_DIR}/Middlewares/ST/netxduo/common/drivers/ethernet/lan8742/nx_stm32_phy_driver.c" "${NETX_DRIVER_DEST}/"
 cp -f "${TEMP_DIR}/Middlewares/ST/netxduo/common/drivers/ethernet/nx_stm32_phy_driver.h" "${NETX_DRIVER_DEST}/"
+cp -f "${TEMP_DIR}/Projects/STM32F767ZI-Nucleo/Applications/NetXDuo/Nx_TCP_Echo_Client/NetXDuo/Target/nx_stm32_eth_config.h" "${NETX_DRIVER_DEST}/"
 
 # ST modified the HAL ETH driver to match the new H7-style API for NetX Duo, so we must overwrite the default ones
 cp -f "${TEMP_DIR}/Drivers/STM32F7xx_HAL_Driver/Src/stm32f7xx_hal_eth.c" "${HAL_DEST}/Src/"

@@ -1,6 +1,6 @@
 # STM32F767ZI-Nucleo Board Enablement Demos
 
-This directory contains the Board Support Package (BSP) static library (`board_bsp`) and build configurations for running the **Eclipse ThreadX RTOS** and **NetX Duo TCP/IP stack** on the **STMicroelectronics NUCLEO-F767ZI** evaluation board (ARM Cortex-M7).
+This directory contains the Board Support Package (BSP) static library (`board_bsp`) and build configurations for running the **Eclipse ThreadX RTOS**, **FileX Embedded File System**, and **NetX Duo TCP/IP stack** on the **STMicroelectronics NUCLEO-F767ZI** evaluation board (ARM Cortex-M7).
 
 The project features a decoupled static BSP library that hides all low-level hardware initializations (clocks, GPIO, MPU, DMA descriptors, and interrupts) from the application code.
 
@@ -13,6 +13,7 @@ Use the `ACTIVE_DEMO` CMake variable to select which demo to compile:
 | Demo Name | Description | Targets |
 | :--- | :--- | :--- |
 | **`netx_echo`** *(Default)* | Dynamic network state machine monitoring cable hot-plugging, DHCP IP configuration, and a TCP Echo Server listening on port 7. | ThreadX, NetX Duo |
+| **`network_station`** | Complete Environmental Station demo polling temperature and humidity metrics, logging CSV records to a local FileX FAT RAM Disk, and publishing JSON telemetry to an MQTT broker. | ThreadX, FileX, NetX Duo |
 | **`threadx_basic`** | Multi-threaded RTOS demo showcasing thread scheduling, mechanical button debouncing, message queue logging, and interrupt-driven UART ring buffers. | ThreadX |
 
 ---
@@ -25,10 +26,10 @@ Use the `ACTIVE_DEMO` CMake variable to select which demo to compile:
   * *Note: The MPU maps `128 KB` of SRAM2 (starting at `0x20060000`) as non-cacheable/non-bufferable for Ethernet DMA descriptors and the packet pool.*
 * **Virtual COM Port**: USART3 (PD8/PD9) connected to ST-LINK debugger (115,200 baud, 8N1)
 * **User Button**: PC13 (Blue button, Active High)
-* **Board LEDs**:
-  * `LD1` (Green) - PB0
-  * `LD2` (Blue) - PB7
-  * `LD3` (Red) - PB14
+* **Board LEDs (VT100 State Indicators)**:
+  * `LD1` (Green) - PB0: Blinks to indicate ThreadX heartbeat.
+  * `LD2` (Blue) - PB7: ON when Ethernet link is up and IP address is resolved.
+  * `LD3` (Red) - PB14: Flashes when network is disconnected or MQTT broker is unreachable.
 
 ---
 
@@ -37,7 +38,7 @@ Use the `ACTIVE_DEMO` CMake variable to select which demo to compile:
 Before building, ensure you have the following cross-compilation tools installed on your system PATH:
 
 * **ARM GNU Toolchain** (`arm-none-eabi-gcc`)
-* **CMake** (version 3.5 or higher)
+* **CMake** (version 3.10 or higher)
 * **Ninja** or **Make**
 * **Git** (for downloading SDK dependencies)
 
@@ -46,7 +47,7 @@ Before building, ensure you have the following cross-compilation tools installed
 ## Quick Start Guide
 
 ### 1. Download SDK Dependencies
-Run the driver fetcher script to clone official, stock STMicroelectronics HAL drivers and CMSIS files locally:
+Run the driver fetcher script to clone official, stock STMicroelectronics HAL drivers, CMSIS files, and driver configurations locally:
 
 * **On Windows (PowerShell)**:
   ```powershell
@@ -69,7 +70,16 @@ cmake -DACTIVE_DEMO=netx_echo -B build
 cmake --build build
 ```
 
-#### Option B: Build `threadx_basic`
+#### Option B: Build `network_station`
+```bash
+# Configure CMake
+cmake -DACTIVE_DEMO=network_station -B build
+
+# Compile
+cmake --build build
+```
+
+#### Option C: Build `threadx_basic`
 ```bash
 # Configure CMake
 cmake -DACTIVE_DEMO=threadx_basic -B build
@@ -92,38 +102,31 @@ The raw binary files will be generated in `build/app/demos/<demo_name>/stm32f767
 
 ---
 
-### 2. How to Run & Verify the `netx_echo` Demo
-1. **Set Up Serial Monitor**: Open your serial terminal program (e.g., VS Code Serial Monitor, PuTTY, or Tera Term) to the virtual ST-LINK COM Port at **115,200 baud, 8N1**.
-2. **Boot Unplugged**: Reset the board with the Ethernet cable disconnected. You should see the following log confirming the BSP initialization completed successfully and the network monitor is polling:
-   ```text
-   ==========================================
-   NetX Echo Demo Booted!
-   ==========================================
-   [HAL] Calling HAL_ETH_Init...
-   [HAL] HAL_ETH_Init returned status: 0
-   [NetX] Initializing PHY transceiver...
-   [NetX] Waiting for Ethernet link (max 3s)...
-   [NetX] Ethernet link timeout! Cable connected?
-   [NetX] Packet pool created
-   [NetX] IP instance created
-   [NetX] Enabling ARP...
-   [NetX] Enabling TCP...
-   [NetX] Enabling UDP...
-   [NetX] Enabling ICMP...
-   [NetX] Creating DHCP Thread...
-   [NetX] tx_application_define completed
-   [NetX] Network Monitor Thread Started.
-   ```
-3. **Connect Cable**: Plug in your network Ethernet cable. The console will report the connection, initiate DHCP, and spawn the TCP Echo Server:
-   ```text
-   [NetX] Ethernet cable connected! Enabling link...
-   [NetX] Ethernet link is UP! Starting DHCP client...
-   [NetX] DHCP Success!
-   [NetX] IP Address : <IP_ADDRESS>
-   [NetX] Subnet Mask: 255.255.255.0
-   [Echo] TCP Echo Server listening on port 7
-   ```
-4. **Run the Simple Echo Test**: Open a terminal on your computer and run one of the included scripts:
+### 2. How to Run & Verify the `network_station` Demo
+1. **Set Up Serial Monitor**: Open your serial terminal program (e.g., VS Code Serial Monitor, PuTTY, or Tera Term) to the virtual ST-LINK COM Port at **115,200 baud, 8N1** (ANSI colored logging is enabled, VT100-compatible terminal recommended).
+2. **Boot Logs**: You will see colored output detailing the startup steps:
+   * **[HAL]** initializing the Ethernet MAC layer.
+   * **[NetX]** setting up the packet pool, ARP cache, and link state.
+   * **[Sensor Thread]** probing the I2C bus (falling back to Mock Mode if HTS221 shield is absent).
+   * **[Logger Thread]** formatting and mounting the 32 KB virtual RAM disk.
+   * **[NetX]** enabling link, running DHCP client, and printing the resolved IP address.
+   * **[DNS]** resolving the IP address of the public MQTT broker.
+   * **[MQTT]** connecting to `test.mosquitto.org:1883` and beginning periodic JSON telemetry publishes.
+3. **Outage/Disconnect Verification**:
+   * Pull the Ethernet cable. The console immediately prints warning codes and enters reconnect state (Red LED starts flashing). 
+   * Local writes to `sensor_log.txt` continue unaffected. 
+   * When `network_queue` fills up, the **Evict Oldest** circular policy discards the oldest unsent reading at the front to prioritize live data upon reconnection.
+4. **Subscribe to Cloud Telemetry**:
+   * Open the [HiveMQ WebSocket Client](http://www.hivemq.com/demos/websocket-client/).
+   * Connect to host `test.mosquitto.org`, port `8081` (ensure **SSL checkbox is active**).
+   * Subscribe to the topic: `samplex/env_station/+/telemetry`. You will see the JSON environmental records arriving in real-time.
+
+---
+
+### 3. How to Run & Verify the `netx_echo` Demo
+1. Open your serial terminal program at **115,200 baud, 8N1**.
+2. Connect the Ethernet cable and boot the board.
+3. Once the Blue LED (`LD2`) turns ON, run the simple client script to test the TCP echo loop:
    * **On Windows (PowerShell)**:
      ```powershell
      powershell -ExecutionPolicy Bypass -File "app/demos/netx_echo/test_echo_simple.ps1" <BOARD_IP_ADDRESS>
@@ -139,11 +142,10 @@ The raw binary files will be generated in `build/app/demos/<demo_name>/stm32f767
      Sending:  'Hello ThreadX NetX Echo!'
      Received: 'Hello ThreadX NetX Echo!'
      ```
-5. **Test Mid-Run Hot-Unplugging**: Disconnect the Ethernet cable. You will see `[NetX] Ethernet cable disconnected! Disabling link...` on the serial console, and the interface IP resets to `0.0.0.0`. Plug the cable back in, and it will re-acquire its configuration dynamically.
 
 ---
 
-### 3. How to Run & Verify the `threadx_basic` Demo
+### 4. How to Run & Verify the `threadx_basic` Demo
 1. Open your serial terminal program at **115,200 baud, 8N1**.
 2. Flash the `threadx_basic` binary to the board.
 3. **Verify Heartbeat**: The Green LED (`LD1`) will blink continuously at `2 Hz` (250ms ON, 250ms OFF).
@@ -198,6 +200,7 @@ target_compile_definitions(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME}
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../..
 )
 
 # Link with BSP, ThreadX, and optionally NetX Duo
@@ -205,6 +208,7 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE
         board_bsp
         threadx
+        # filex              # Uncomment if using filesystem
         # netxduo            # Uncomment if using network
         # netx_stm32_driver  # Uncomment if using network
         stm32cubef7

@@ -11,6 +11,9 @@
 
 add_executable(${PROJECT_NAME}
     main.c
+    sensor_driver.c
+    mock_sensor.c
+    hts221_reg.c
 )
 
 # Set compile definitions for our executable
@@ -33,6 +36,9 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE
         board_bsp
         threadx
+        filex
+        netxduo
+        netx_stm32_driver
         stm32cubef7
 )
 
