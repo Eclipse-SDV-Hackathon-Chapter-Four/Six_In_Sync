@@ -1,0 +1,68 @@
+/*
+ * Copyright (c) 2026 Eclipse ThreadX contributors
+ *
+ * This program and the accompanying materials are made available
+ * under the terms of the MIT license which is available at
+ * https://opensource.org/licenses/MIT.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#include <stdint.h>
+#include "hwtimer.h"
+#include "plic.h"
+#include "uart.h"
+
+extern void _tx_timer_interrupt(void);
+extern void console_rx_isr_callback(char c);
+
+static void print_hex64(uint64_t val) {
+    const char hex_chars[] = "0123456789ABCDEF";
+    char buf[19];
+    buf[0] = '0';
+    buf[1] = 'x';
+    for (int i = 15; i >= 0; --i) {
+        buf[2 + (15 - i)] = hex_chars[(val >> (i * 4)) & 0xF];
+    }
+    buf[18] = '\0';
+    uart_puts(buf);
+}
+
+void trap_handler(uint64_t mcause, uint64_t mepc, uint64_t mtval) {
+    /* Check if trap is an interrupt (bit 63 set) */
+    if (mcause & (1ULL << 63)) {
+        uint64_t irq = mcause & 0x3FULL;
+        if (irq == 7) {
+            /* Machine Timer Interrupt (CLINT MTIME) */
+            hwtimer_ack();
+            _tx_timer_interrupt();
+            return;
+        } else if (irq == 11) {
+            /* Machine External Interrupt (PLIC) */
+            uint32_t source = plic_claim();
+            if (source == MMUART1_IRQ) {
+                while (uart_has_rx()) {
+                    char c = uart_getc();
+                    console_rx_isr_callback(c);
+                }
+            }
+            plic_complete(source);
+            return;
+        }
+    }
+
+    /* Unhandled interrupt or synchronous exception */
+    uart_puts("\r\n========================================\r\n");
+    uart_puts("[FATAL TRAP] System Halted!\r\n");
+    uart_puts("  mcause: ");
+    print_hex64(mcause);
+    uart_puts("\r\n  mepc:   ");
+    print_hex64(mepc);
+    uart_puts("\r\n  mtval:  ");
+    print_hex64(mtval);
+    uart_puts("\r\n========================================\r\n");
+
+    while (1) {
+        __asm__ volatile("wfi");
+    }
+}

@@ -1,0 +1,46 @@
+:name: PolarFire SoC - ThreadX Demo (headless CI run)
+:description: Deterministic virtual-time run driven by scripts/test_renode.py.
+
+# This is a standalone counterpart to polarfire_demo.resc rather than an include
+# of it. Renode resolves $ORIGIN only in variable assignment, so an included
+# script cannot be located relative to the file including it, and the two run
+# differently anyway: the demo script free-runs for interactive use, while this
+# one steps through fixed virtual-time intervals so the run is reproducible and
+# terminates on its own instead of depending on wall clock.
+
+Clear
+
+using sysbus
+mach create "PolarFire_SoC_Icicle"
+machine LoadPlatformDescription @platforms/cpus/polarfire-soc.repl
+
+# Under --plain --disable-gui this logs MMUART1 traffic to stdout, which is
+# what the assertions in test_renode.py read.
+showAnalyzer mmuart1
+
+$bin?=$ORIGIN/../build/app/polarfire_icicle_demo.elf
+
+macro reset
+"""
+    sysbus LoadELF $bin
+    # Route execution directly to Hart 1 (U54 Core 1)
+    u54_1 PC `e51 PC`
+    e51 IsHalted true
+    u54_2 IsHalted true
+    u54_3 IsHalted true
+    u54_4 IsHalted true
+"""
+runMacro $reset
+
+# Boot, startup self-tests, and the first system ticks.
+emulation RunFor "0.5"
+
+# Deliver a byte to MMUART1. This is the only step that exercises the PLIC
+# external-interrupt path: configuring the controller and reading its registers
+# back cannot distinguish the machine-mode context from the supervisor one.
+mmuart1 WriteChar 88
+
+# Long enough for the simulated LM75 ramp to cross the 45C alarm threshold.
+emulation RunFor "7"
+
+quit
