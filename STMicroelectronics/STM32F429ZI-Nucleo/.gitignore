@@ -1,0 +1,4 @@
+lib/stm32cubef4/*
+
+# Fetched by scripts/fetch_sdk.sh from ST's CMSIS device pack.
+tools/STM32F429.svd
