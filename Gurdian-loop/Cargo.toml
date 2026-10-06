@@ -1,0 +1,36 @@
+[package]
+name = "guardian-sil"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+tokio = { version = "1", features = [
+    "macros",
+    "rt-multi-thread",
+    "signal",
+    "time"
+] }
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+up-rust = "0.9"
+up-transport-zenoh = "0.9"
+zenoh = "1"
+
+[[bin]]
+name = "child-sensor-sim"
+path = "child-sensor-sim/main.rs"
+
+[[bin]]
+name = "temp-sensor-sim"
+path = "temp-sensor-sim/main.rs"
+
+[[bin]]
+name = "guardian"
+path = "guardian/main.rs"

@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package guardian;
+
+message ChildPresenceEvent {
+    bool present = 1;
+    float confidence = 2;
+    string zone = 3;
+    uint64 timestamp_ms = 4;
+}
+
+message CabinTemperatureEvent {
+    float temperature_celsius = 1;
+    uint64 timestamp_ms = 2;
+    string sensor_status = 3;
+}
+
+enum GuardianState {
+    CLEAR = 0;
+    MONITORING = 1;
+    WARNING = 2;
+    CRITICAL = 3;
+    MITIGATING = 4;
+}
+
+message GuardianStateEvent {
+    GuardianState state = 1;
+    bool child_present = 2;
+    float temperature_celsius = 3;
+    float temperature_rate = 4;
+}
