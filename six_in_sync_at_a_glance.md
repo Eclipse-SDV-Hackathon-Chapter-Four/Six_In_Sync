@@ -4,6 +4,7 @@ Six singles provinding a child protecting solution, syncing between different ca
 # Roster
 - Sören Fox: Dual Student working at ZF, Studying Embedded Systems at the DHBW - GitHub: 
 - Till Winter: Dual Student working at Mercedes Benz, Studying Embedded Systems at the DHBW - GitHub: ProjectfirstLearner
+- Lindsay Shantha Rubia: Master Student studying Autonomous Driving at HS Coburg - GitHub: lindsayk09
 
 # Challenge allignment
 Team Six-In-Sync will compete in Track 1: Hack to the Future. 
