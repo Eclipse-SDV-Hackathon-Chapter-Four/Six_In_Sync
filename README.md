@@ -37,6 +37,54 @@ the Guardian decision logic.
    The controller operates the simulated or physical actuator and
    reports the result.
 
+## Running with the ThreadX SOME/IP Temperature Sensor
+
+The ThreadX Linux-port simulator sends SOME/IP temperature notifications over
+UDP. The bridge converts accepted readings to uProtocol and publishes them to
+the temperature topic consumed by Guardian. Do not run `temp-sensor-sim` at the
+same time; the bridge replaces it.
+
+Build the simulator from the repository root in a WSL/Linux terminal:
+
+```sh
+cd threadx-temp-sensor
+cmake --preset linux-threadx -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+cmake --build --preset linux-threadx --parallel
+```
+
+Run each command in a separate terminal. Start Guardian:
+
+```sh
+cd Guardian-loop
+cargo run --bin guardian
+```
+
+Start the bridge on UDP port `30511`:
+
+```sh
+cd Guardian-loop
+SOMEIP_LISTEN_PORT=30511 cargo run --bin bridge
+```
+
+Start the child-presence simulator:
+
+```sh
+cd Guardian-loop
+cargo run --bin child-sensor-sim
+```
+
+Start the ThreadX temperature simulator and point it at the bridge:
+
+```sh
+cd threadx-temp-sensor
+BRIDGE_IP=127.0.0.1 BRIDGE_PORT=30511 ./build/linux-threadx/threadx_temp_sensor
+```
+
+The bridge defaults to `0.0.0.0:30501`; this example uses port `30511` so the
+sensor and bridge can share a known-free local port. If you choose another
+port, set it in both `SOMEIP_LISTEN_PORT` and `BRIDGE_PORT`. For the Docker or
+Renode setups, use the appropriate bridge IP instead of `127.0.0.1`.
+
 ## Proposed System Architecture
 
 ```mermaid
