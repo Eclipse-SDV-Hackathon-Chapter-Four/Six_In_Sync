@@ -62,37 +62,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         (false, 0.99),
     ];
 
-    for (present, confidence) in scenarios {
-        let event = ChildPresenceEvent {
-            present,
-            confidence,
-            zone: "rear-seat".to_string(),
-            timestamp_ms: timestamp_ms(),
-        };
-
-        let json = serde_json::to_string(&event)?;
-
-        let message = UMessageBuilder::publish(topic.clone())
-            .build_with_payload(
-                json,
-                UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
-            )?;
-
-        transport.send(message).await?;
-
-        println!(
-            "[CHILD SENSOR] child_present={}",
-            present
-        );
-
-        sleep(Duration::from_secs(5)).await;
-    }
-
-    println!();
-    println!("Child sensor simulation finished.");
-
-    // Keep process alive so you can observe the system.
     loop {
-        sleep(Duration::from_secs(60)).await;
+
+        for (present, confidence) in scenarios {
+            let event = ChildPresenceEvent {
+                present,
+                confidence,
+                zone: "rear-seat".to_string(),
+                timestamp_ms: timestamp_ms(),
+            };
+
+            let json = serde_json::to_string(&event)?;
+
+            let message = UMessageBuilder::publish(topic.clone())
+                .build_with_payload(
+                    json,
+                    UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
+                )?;
+
+            transport.send(message).await?;
+
+            println!(
+                "[CHILD SENSOR] child_present={}",
+                present
+            );
+
+            sleep(Duration::from_secs(5)).await;
+        }
     }
 }

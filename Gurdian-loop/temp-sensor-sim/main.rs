@@ -59,35 +59,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         43.0,
     ];
 
-    for temperature in temperatures {
-        let event = CabinTemperatureEvent {
-            temperature_celsius: temperature,
-            timestamp_ms: timestamp_ms(),
-            sensor_status: "OK".to_string(),
-        };
-
-        let json = serde_json::to_string(&event)?;
-
-        let message = UMessageBuilder::publish(topic.clone())
-            .build_with_payload(
-                json,
-                UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
-            )?;
-
-        transport.send(message).await?;
-
-        println!(
-            "[TEMP SENSOR] temperature={:.1}°C",
-            temperature
-        );
-
-        sleep(Duration::from_secs(5)).await;
-    }
-
-    println!();
-    println!("Temperature simulation finished.");
-
     loop {
-        sleep(Duration::from_secs(60)).await;
+
+        for temperature in temperatures {
+            let event = CabinTemperatureEvent {
+                temperature_celsius: temperature,
+                timestamp_ms: timestamp_ms(),
+                sensor_status: "OK".to_string(),
+            };
+
+            let json = serde_json::to_string(&event)?;
+
+            let message = UMessageBuilder::publish(topic.clone())
+                .build_with_payload(
+                    json,
+                    UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
+                )?;
+
+            transport.send(message).await?;
+
+            println!(
+                "[TEMP SENSOR] temperature={:.1}°C",
+                temperature
+            );
+
+            sleep(Duration::from_secs(5)).await;
+        }
     }
 }
