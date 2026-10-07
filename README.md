@@ -130,3 +130,25 @@ unchanged.
 > This is a hackathon prototype. Child presence is initially
 > simulated, and demonstration thresholds are not certified
 > vehicle-safety thresholds.
+
+## Copyright (c) 2026 Real H. Uman 1
+
+- This program and the accompanying materials are made available under the terms of the Eclipse Public License 2.0 which accompanies this
+distribution, and is available at https://www.eclipse.org/legal/epl-2.0/
+
+# AI Disclosure: 
+- Our solution partly used AI. The AI-generated 3
+portions are made available under CC0-1.0 and not subject to the
+project's licence. The human contributor has reviewed and verified
+that the code is correct.
+
+- SPDX-License-Identifier: EPL-2.0 and CC0-1.0 4
+- **Topic:** System Architecture & Rust Code
+- **Assisted-by:** ChatGPT (GPT-6 Astra)
+  
+
+
+
+
+
+
