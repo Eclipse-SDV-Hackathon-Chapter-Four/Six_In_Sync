@@ -14,7 +14,6 @@
 
 use async_trait::async_trait;
 use std::{
-    path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -31,22 +30,6 @@ use up_rust::{
 use up_transport_zenoh::{
     zenoh_config,
     UPTransportZenoh,
-};
-
-use common::{
-    fault::{LifecyclePhase, LifecycleStage},
-    types::MetadataVec,
-};
-
-use fault_lib::{
-    FaultApi,
-    catalog::FaultCatalogBuilder,
-    reporter::{
-        Reporter,
-        ReporterApi,
-        ReporterConfig,
-    },
-    utils::to_static_short_string,
 };
 
 const AUTHORITY: &str = "guardian-demo";
@@ -90,12 +73,6 @@ struct SovdActuationResult {
     details: String,
 }
 
-// use std::{
-//     path::PathBuf,
-//     sync::{Arc, Mutex},
-//     time::Duration,
-// };
-
 #[derive(Debug)]
 enum SovdClientError {
     InvalidWindow(String),
@@ -107,125 +84,6 @@ enum SovdClientError {
         status: reqwest::StatusCode,
         body: String,
     },
-}
-
-
-struct ActuationFaultReporter {
-    reporter: Mutex<Reporter>,
-    sovd_path: String,
-}
-
-impl ActuationFaultReporter {
-    fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let config = ReporterConfig {
-            source: common::ids::SourceId {
-                entity: to_static_short_string(
-                    "actuation-adapter",
-                )?,
-                ecu: Some(
-                    common::types::ShortString::from_bytes(
-                        b"ECU-A",
-                    )?,
-                ),
-                domain: Some(
-                    to_static_short_string("Body")?,
-                ),
-                sw_component: Some(
-                    to_static_short_string(
-                        "WindowActuationAdapter",
-                    )?,
-                ),
-                instance: Some(
-                    to_static_short_string("0")?,
-                ),
-            },
-            lifecycle_phase: LifecyclePhase::Running,
-            default_env_data: MetadataVec::new(),
-        };
-
-        let catalog = FaultApi::get_fault_catalog();
-
-        let fault_id = catalog
-            .descriptors()
-            .next()
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!(
-                        "catalog '{}' contains no faults",
-                        catalog.id
-                    ),
-                )
-            })?
-            .id
-            .clone();
-
-        println!(
-            "[ACTUATOR] Using fault ID: {:?}",
-            fault_id
-        );
-
-        let sovd_path = catalog.id.to_string();
-
-        let reporter = Reporter::new(&fault_id, config)?;
-
-        Ok(Self {
-            reporter: Mutex::new(reporter),
-            sovd_path,
-        })
-    }
-
-    fn publish_stage(
-        &self,
-        stage: LifecycleStage,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut reporter = self
-            .reporter
-            .lock()
-            .map_err(|_| {
-                std::io::Error::other(
-                    "actuation fault reporter mutex was poisoned",
-                )
-            })?;
-
-        let record = reporter.create_record(stage);
-
-        reporter.publish(&self.sovd_path, record)?;
-
-        Ok(())
-    }
-
-    fn passed(&self) {
-        match self.publish_stage(LifecycleStage::Passed) {
-            Ok(()) => {
-                println!(
-                    "[ACTUATOR] Published fault -> Passed"
-                );
-            }
-            Err(error) => {
-                eprintln!(
-                    "[ACTUATOR] Could not publish Passed: {}",
-                    error
-                );
-            }
-        }
-    }
-
-    fn failed(&self) {
-        match self.publish_stage(LifecycleStage::Failed) {
-            Ok(()) => {
-                println!(
-                    "[ACTUATOR] Published fault -> Failed"
-                );
-            }
-            Err(error) => {
-                eprintln!(
-                    "[ACTUATOR] Could not publish Failed: {}",
-                    error
-                );
-            }
-        }
-    }
 }
 
 
@@ -550,7 +408,6 @@ const GUARDIAN_REPLY: &str = "//guardian-demo/1000/1/0000";
 struct ActuatorListener {
     transport: Arc<UPTransportZenoh>,
     sovd_client: Arc<SovdClient>,
-    actuation_fault: Arc<ActuationFaultReporter>,
 }
 
 // ============================================================
@@ -703,9 +560,6 @@ impl UListener for ActuatorListener {
                 println!("[ACTUATOR] SOVD actuation completed.");
                 println!("[ACTUATOR] Details: {}", result.details);
 
-                // The monitored operation succeeded, so report Passed.
-                self.actuation_fault.passed();
-
                 serde_json::json!({
                     "success": true,
                     "window": command.window,
@@ -717,9 +571,6 @@ impl UListener for ActuatorListener {
 
             Err(error) => {
                 eprintln!("[ACTUATOR] SOVD actuation failed: {}", error);
-
-                // The monitored operation failed, so report Failed.
-                self.actuation_fault.failed();
 
                 serde_json::json!({
                     "success": false,
@@ -854,29 +705,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // CREATE SOVD CLIENT
     // ========================================================
 
-    let fault_catalog_file = std::env::var("FAULT_CATALOG_FILE")
-    .unwrap_or_else(|_| {
-        "./diagnostics/catalog/window_actuation_fault_catalog.json".to_string()
-    });
-
-    println!(
-        "[ACTUATOR] Fault catalog: {}",
-        fault_catalog_file
-    );
-
-    let fault_catalog = FaultCatalogBuilder::new()
-        .json_file(PathBuf::from(&fault_catalog_file))?
-        .build();
-
-    // This value must remain alive until main exits.
-    let _fault_api = FaultApi::try_new(fault_catalog)?;
-
-    let actuation_fault = Arc::new(
-        ActuationFaultReporter::new()?
-    );
-
-    println!(
-        "[ACTUATOR] Fault reporter initialized"
+    eprintln!(
+        "[ACTUATOR] Diagnostic fault reporting is disabled; the fault-lib dependency is not included."
     );
 
     let cda_base_url =
@@ -968,7 +798,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = Arc::new(ActuatorListener {
     transport: transport.clone(),
     sovd_client: sovd_client.clone(),
-    actuation_fault: actuation_fault.clone(),
     });
 
     // ========================================================

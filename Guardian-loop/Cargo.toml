@@ -5,15 +5,10 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
+axum = { version = "0.8", features = ["ws"] }
+futures-util = "0.3"
 
-common = { path = "../../tooling/fault-lib/src/common" }
-fault_lib = { path = "../../tooling/fault-lib/src/fault_lib" }
-
-reqwest = {
-    version = "0.12",
-    default-features = false,
-    features = ["json", "rustls-tls"]
-}
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -21,7 +16,10 @@ tokio = { version = "1", features = [
     "macros",
     "rt-multi-thread",
     "signal",
-    "time"
+    "time",
+    "io-util",
+    "net",
+    "process"
 ] }
 
 tracing = "0.1"
@@ -48,5 +46,9 @@ name = "actuator-sim"
 path = "actuator-sim/main.rs"
 
 [[bin]]
-name = bridge
-path = bridge/someip_uprot_bridge.rs
+name = "bridge"
+path = "bridge/someip_uprot_bridge.rs"
+
+[[bin]]
+name = "dashboard"
+path = "dashboard/main.rs"
