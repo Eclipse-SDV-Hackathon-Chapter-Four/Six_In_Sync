@@ -66,4 +66,4 @@ runMacro $reset
 echo "STM32F407 ThreadX temperature sensor — starting simulation."
 echo "  Emulated IP : 192.168.100.2"
 echo "  Host TAP    : 192.168.100.1 (tap0)"
-echo "  SOME/IP     : Service 0x1234 → 192.168.100.1:30501"
+echo "  SOME/IP     : Service 0x1234 → 192.168.100.1:30511"

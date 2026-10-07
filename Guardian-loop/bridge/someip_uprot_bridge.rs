@@ -94,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listen_port: u16 = std::env::var("SOMEIP_LISTEN_PORT")
         .ok()
         .and_then(|port| port.parse().ok())
-        .unwrap_or(30501);
+        .unwrap_or(30511);
     let bind_addr = format!("{listen_addr}:{listen_port}");
 
     info!("=== SOME/IP to uProtocol bridge ===");
