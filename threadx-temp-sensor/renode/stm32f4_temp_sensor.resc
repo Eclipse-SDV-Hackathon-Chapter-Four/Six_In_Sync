@@ -1,0 +1,69 @@
+################################################################################
+# Renode script — STM32F407 ThreadX temperature sensor
+#
+# Boots the ThreadX temperature sensor ELF on a simulated STM32F407 and
+# connects the virtual Ethernet to the host via a TAP device so SOME/IP
+# UDP packets reach the someip-uprot-bridge.
+#
+# Prerequisites (host / container):
+#   • ip tuntap add dev tap0 mode tap   (requires CAP_NET_ADMIN)
+#   • ip addr add 192.168.100.1/24 dev tap0
+#   • ip link set tap0 up
+#
+# The ThreadX/lwIP stack inside the emulated device uses:
+#   IP      : 192.168.100.2
+#   Gateway : 192.168.100.1
+#
+# Usage (headless):
+#   renode --disable-xwt --plain \
+#     -e '$firmware=@build/cortexm4-renode/threadx_temp_sensor.elf;
+#         $logfile=@/tmp/uart.log;
+#         i @renode/stm32f4_temp_sensor.resc; start'
+#
+# SPDX-License-Identifier: Apache-2.0
+################################################################################
+
+using sysbus
+
+# ── Machine ──────────────────────────────────────────────────────────────────
+mach create "stm32f4-temp-sensor"
+
+# Base STM32F407 platform (CPU, memories, peripherals)
+machine LoadPlatformDescription @platforms/boards/stm32f4_discovery-kit.repl
+
+# Add the STM32F407 Ethernet MAC (not in the discovery-kit platform by default)
+machine LoadPlatformDescriptionFromString """
+ethernet: Network.STM32F_Ethernet @ sysbus 0x40028000
+    IRQ -> nvic@61
+"""
+
+# ── Networking ───────────────────────────────────────────────────────────────
+emulation CreateSwitch "switch"
+
+# Connect the STM32 virtual Ethernet to the switch
+connector Connect sysbus.ethernet switch
+
+# Create a TAP interface on the host and attach it to the same switch.
+# This lets SOME/IP UDP packets from the emulated device reach the host
+# network where the someip-uprot-bridge is listening.
+emulation CreateTap "tap0" "host"
+connector Connect host switch
+
+# Set a deterministic MAC for the virtual STM32 device
+sysbus.ethernet MAC "02:00:00:11:22:33"
+
+# ── UART — debug output ───────────────────────────────────────────────────────
+# Capture USART2 to a file for automated result parsing (mirrors the
+# opensomeip CI convention from stm32f4_test.resc).
+sysbus.usart2 CreateFileBackend $logfile true
+
+# ── Firmware ─────────────────────────────────────────────────────────────────
+macro reset """
+    sysbus LoadELF $firmware
+"""
+runMacro $reset
+
+echo "STM32F407 ThreadX temperature sensor — starting simulation."
+echo "  Emulated IP : 192.168.100.2"
+echo "  Host TAP    : 192.168.100.1 (tap0)"
+echo "  SOME/IP     : Service 0x1234 → 192.168.100.1:30501"

@@ -1,0 +1,38 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "linux-threadx",
+      "displayName": "Linux / ThreadX Linux port (Docker service)",
+      "description": "Builds the temperature sensor using the Eclipse ThreadX Linux port. This is the path used by the Docker Compose service.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-threadx",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "THREADX_ARM_TARGET": "OFF"
+      }
+    },
+    {
+      "name": "threadx-cortexm4-renode",
+      "displayName": "ARM Cortex-M4 / Renode (STM32F407 emulation)",
+      "description": "Cross-compiles for ARM Cortex-M4. Requires arm-none-eabi-gcc. Run the resulting ELF in Renode using renode/stm32f4_temp_sensor.resc.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/cortexm4-renode",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi-toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "THREADX_ARM_TARGET": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-threadx",
+      "configurePreset": "linux-threadx"
+    },
+    {
+      "name": "threadx-cortexm4-renode",
+      "configurePreset": "threadx-cortexm4-renode"
+    }
+  ]
+}

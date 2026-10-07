@@ -34,3 +34,7 @@ path = "temp-sensor-sim/main.rs"
 [[bin]]
 name = "guardian"
 path = "guardian/main.rs"
+
+[[bin]]
+name = "bridge"
+path = "bridge/someip_uprot_bridge.rs"

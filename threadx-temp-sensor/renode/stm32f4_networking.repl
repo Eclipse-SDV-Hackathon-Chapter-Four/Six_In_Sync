@@ -1,0 +1,18 @@
+################################################################################
+# stm32f4_networking.repl
+#
+# Platform description fragment that adds the STM32F407 Ethernet MAC to the
+# base discovery-kit platform when running the temperature sensor in Renode.
+#
+# Loaded via:
+#   machine LoadPlatformDescriptionFromString (see stm32f4_temp_sensor.resc)
+#
+# The STM32F407 Ethernet MAC (register-compatible with STM32F4xx family):
+#   Base address : 0x40028000
+#   IRQ line     : 61  (ETH_IRQn in STM32F4xx vector table)
+#
+# SPDX-License-Identifier: Apache-2.0
+################################################################################
+
+ethernet: Network.STM32F_Ethernet @ sysbus 0x40028000
+    IRQ -> nvic@61
