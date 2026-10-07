@@ -46,6 +46,6 @@ RUN chmod +x /app/threadx_temp_sensor
 # Target bridge hostname (Docker service name) and port.
 # Override with -e BRIDGE_IP=<ip> BRIDGE_PORT=<port> if needed.
 ENV BRIDGE_IP=someip-uprot-bridge
-ENV BRIDGE_PORT=30501
+ENV BRIDGE_PORT=30511
 
 ENTRYPOINT ["/app/threadx_temp_sensor"]

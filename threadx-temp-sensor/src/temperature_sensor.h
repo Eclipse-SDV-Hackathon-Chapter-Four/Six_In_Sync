@@ -30,7 +30,7 @@ static constexpr uint16_t TEMP_SOMEIP_SERVICE_ID = 0x1234u;
 static constexpr uint16_t TEMP_SOMEIP_EVENT_ID   = 0x8001u;
 static constexpr uint16_t TEMP_SOMEIP_CLIENT_ID  = 0x0001u;
 static constexpr uint8_t  TEMP_SOMEIP_IFACE_VER  = 0x01u;
-static constexpr uint16_t TEMP_SOMEIP_PORT        = 30501u;
+static constexpr uint16_t TEMP_SOMEIP_PORT        = 30511u;
 
 static constexpr uint16_t WINDOW_SOMEIP_SERVICE_ID = 0x5678u;
 static constexpr uint16_t WINDOW_SOMEIP_EVENT_ID   = 0x8002u;
