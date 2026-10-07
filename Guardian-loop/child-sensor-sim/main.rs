@@ -1,3 +1,5 @@
+// Co-authored with AI assistance. Reviewed and approved by the project authors.
+
 use async_trait::async_trait;
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};

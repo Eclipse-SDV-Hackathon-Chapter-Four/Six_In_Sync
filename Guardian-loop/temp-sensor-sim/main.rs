@@ -1,3 +1,5 @@
+// Co-authored with AI assistance. Reviewed and approved by the project authors.
+
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{sleep, Duration};
