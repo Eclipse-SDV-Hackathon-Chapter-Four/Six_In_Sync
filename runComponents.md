@@ -12,35 +12,30 @@ The Guardian loop contains, besides other parts, the following main components:
 
 ### Guardian
 ```bash
-wsl
 cd ~/hackathon/Six_In_Sync/Guardian-loop
 cargo run --bin guardian
 ```
 
 ### Bridge
 ```bash
-wsl
 cd ~/hackathon/Six_In_Sync/Guardian-loop
 SOMEIP_LISTEN_PORT=30511 cargo run --bin bridge
 ```
 
 ### Child sensor sim
 ```bash
-wsl
 cd ~/hackathon/Six_In_Sync/Guardian-loop
 cargo run --bin child-sensor-sim
 ```
 
 ### Temp sensor sim
 ```bash
-wsl
 cd ~/hackathon/Six_In_Sync/Guardian-loop
 cargo run --bin temp-sensor-sim
 ```
 
 ### Outer ThreadX sensor
 ```bash
-wsl
 cd ~/hackathon/Six_In_Sync/threadx-temp-sensor
 cmake --preset linux-threadx -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 cmake --build --preset linux-threadx --parallel
