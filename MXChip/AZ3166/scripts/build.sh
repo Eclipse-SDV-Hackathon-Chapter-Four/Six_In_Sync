@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AZ3166_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${AZ3166_DIR}/build"
 NUM_JOBS=$(nproc || echo 4)
-CONFIG=${1:-starter}
+CONFIG=${1:-telemetry}
 
 echo "=========================================="
 echo "IoT DevKit - Build Script"

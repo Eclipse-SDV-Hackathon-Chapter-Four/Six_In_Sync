@@ -1,24 +1,27 @@
-/* 
- *  Copyright (c) 2025 Eclipse Foundation
- * 
- *  This program and the accompanying materials are made available 
- *  under the terms of the MIT license which is available at
- *  https://opensource.org/license/mit.
- * 
- *  SPDX-License-Identifier: MIT
- * 
- *  Contributors: 
- *     Frédéric Desbiens - Initial version.
+/*
+ * Copyright (c) Microsoft
+ * Copyright (c) 2024 Eclipse Foundation
+ *
+ * This program and the accompanying materials are made available
+ * under the terms of the MIT license.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * AI assistance disclosure:
+ * This file was modified with assistance from GitHub Copilot (GPT-5.6 Luna).
+ * The changes were reviewed by the author.
  */
 
 #include "cloud_config.h"
 #include "nanoprintf.h" 
 #include "sensor.h"
+#include "temperature_publisher.h"
 #include "telemetry.h"
+#include "wwd_networking.h"
 #include <stdio.h>
 
 // Refresh interval
-static const int32_t telemetry_interval = 5;
+static const int32_t telemetry_interval = 1;
 
 // Current data
 static sensor_data current_sensor_data;
@@ -101,10 +104,39 @@ static void print_sensor_data(sensor_data data){
  */
 void telemetry_thread_entry(ULONG parameter)
 {
-    //UINT status;
+    UINT status;
+    UINT publisher_ready = 0U;
     sensor_data new_sensor_data;
 
     printf("Starting telemetry thread\r\n\r\n");
+    printf("WLAN connection is being established...\r\n");
+
+    status = wwd_network_init(WIFI_SSID, WIFI_PASSWORD, WIFI_MODE);
+    if (status != NX_SUCCESS)
+    {
+        printf("ERROR: Failed to initialize the network (0x%08x)\r\n", status);
+    }
+    else
+    {
+        status = wwd_network_connect();
+        if (status != NX_SUCCESS)
+        {
+            printf("ERROR: Failed to connect to WiFi (0x%08x)\r\n", status);
+        }
+        else
+        {
+            printf("WLAN connection established\r\n");
+        }
+    }
+    if (status == NX_SUCCESS)
+    {
+        status = temperature_publisher_init();
+        publisher_ready = (status == NX_SUCCESS);
+        if (!publisher_ready)
+        {
+            printf("ERROR: Failed to initialize temperature publisher (0x%08x)\r\n", status);
+        }
+    }
 
     while(1){
 
@@ -122,6 +154,11 @@ void telemetry_thread_entry(ULONG parameter)
         memcpy(new_sensor_data.magnetic_mG, 
                lis2mdl_data.magnetic_mG,
                sizeof(lis2mdl_data.magnetic_mG));
+
+        if (publisher_ready)
+        {
+            temperature_publisher_send(new_sensor_data.temperature_degC);
+        }
 
         if (data_changed(&current_sensor_data, &new_sensor_data)){
             #ifdef LOG_TELEMETRY

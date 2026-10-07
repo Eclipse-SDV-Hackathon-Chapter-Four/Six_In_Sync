@@ -5,14 +5,14 @@
 #  under the terms of the MIT license which is available at
 #  https://opensource.org/license/mit.
 # 
-#  SPDX-License-Identifier: MIT
-# 
-#  Contributors: 
-#     Microsoft         - Initial version
-#     Frédéric Desbiens - 2024 version.
-
+# SPDX-License-Identifier: MIT
+#
+# AI assistance disclosure:
+# This file was modified with assistance from GitHub Copilot (GPT-5.6 Luna).
+# The changes were reviewed by the author.
+#
 if(NOT APP_CONFIG)
-    set(APP_CONFIG "starter")
+    set(APP_CONFIG "telemetry")
 endif()
 
 message(STATUS "Building application with configuration: ${APP_CONFIG}")
@@ -50,6 +50,7 @@ elseif(APP_CONFIG STREQUAL "telemetry")
         ${COMMON_DIR}/board_init.c
         ${COMMON_DIR}/screen.c
         ${CONFIG_DIR}/telemetry.c
+        ${CONFIG_DIR}/temperature_publisher.c
         ${CONFIG_DIR}/main.c
         ${CONFIG_DIR}/cloud_config.h
     )

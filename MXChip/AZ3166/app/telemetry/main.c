@@ -6,11 +6,11 @@
  *  under the terms of the MIT license which is available at
  *  https://opensource.org/license/mit.
  * 
- *  SPDX-License-Identifier: MIT
- * 
- *  Contributors: 
- *     Microsoft         - Initial version
- *     Frédéric Desbiens - 2024 version.
+ * SPDX-License-Identifier: MIT
+ *
+ * AI assistance disclosure:
+ * This file was modified with assistance from GitHub Copilot (GPT-5.6 Luna).
+ * The changes were reviewed by the author.
  */
 
 #include <stdio.h>
@@ -59,6 +59,8 @@ int main(void)
 {
     // Initialize the board
     board_init();
+
+    printf("Starting Eclipse ThreadX telemetry application\r\n\r\n");
 
     // Enter the ThreadX kernel
     tx_kernel_enter();
