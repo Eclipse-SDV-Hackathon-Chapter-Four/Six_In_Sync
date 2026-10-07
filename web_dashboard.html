@@ -1,163 +1,280 @@
-use axum::{
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    response::Html,
-    routing::get,
-    Router,
-};
-use futures_util::{SinkExt, StreamExt};
-use serde::Serialize;
-use std::{
-    process::Stdio,
-    sync::Arc,
-    time::Duration,
-};
-use tokio::{
-    io::{AsyncBufReadExt, BufReader},
-    process::Command,
-    sync::broadcast,
-};
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guardian 4-Terminal Live Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0c0f17;
+            --term-bg: #090c10;
+            --border-color: #30363d;
+            --text-main: #c9d1d9;
+            --green: #3fb950;
+            --yellow: #d29922;
+            --red: #f85149;
+            --blue: #58a6ff;
+            --purple: #bc8cff;
+        }
 
-#[derive(Clone, Serialize, Debug)]
-struct StateUpdate {
-    r#type: String,
-    state: String,
-    child: bool,
-    temp: String,
-    window: String,
-    log_text: Option<String>,
-    log_level: Option<String>,
-}
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt::init();
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
 
-    // Broadcast channel for streaming events to all WebSocket clients
-    let (tx, _rx) = broadcast::channel::<String>(100);
-    let tx = Arc::new(tx);
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            background: #161b22;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
 
-    // Spawn Guardian Process Reader thread
-    let tx_guardian = tx.clone();
-    tokio::spawn(async move {
-        run_guardian_wrapper(tx_guardian).await;
-    });
+        .title-group { display: flex; align-items: center; gap: 12px; }
+        .live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+        h1 { font-size: 1.1rem; font-family: monospace; letter-spacing: 1px; }
 
-    // Build Axum web server router
-    let app = Router::new()
-        .route("/", get(index_handler))
-        .route("/ws", get(move |ws| ws_handler(ws, tx.clone())));
+        .banner {
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+        .banner.CLEAR { color: var(--green); border-color: var(--green); background: rgba(63, 185, 80, 0.1); }
+        .banner.MONITORING { color: var(--blue); border-color: var(--blue); background: rgba(88, 166, 255, 0.1); }
+        .banner.WARNING { color: var(--yellow); border-color: var(--yellow); background: rgba(210, 153, 34, 0.1); }
+        .banner.CRITICAL { color: var(--red); border-color: var(--red); background: rgba(248, 81, 73, 0.2); animation: pulse 0.5s infinite alternate; }
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080")
-        .await
-        .expect("Failed to bind port 8080");
+        @keyframes pulse { from { opacity: 0.7; } to { opacity: 1.0; } }
 
-    println!("==================================================");
-    println!("🚀 Rust Safety Dashboard Running on http://localhost:8080");
-    println!("==================================================");
+        .enable-btn {
+            background: #238636; color: white; border: none; padding: 8px 16px;
+            border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.85rem;
+        }
+        .enable-btn.active { background: #1f6feb; }
 
-    axum::serve(listener, app).await.unwrap();
-}
+        /* 2x2 Grid for Terminals */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 16px;
+            flex-grow: 1;
+            height: calc(100vh - 140px);
+        }
 
-async fn index_handler() -> Html<&'static str> {
-    Html(include_str!("../../static/index.html"))
-}
+        .term-card {
+            background: var(--term-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    tx: Arc<broadcast::Sender<String>>,
-) -> axum::response::Response {
-    ws.on_upgrade(|socket| handle_socket(socket, tx))
-}
+        .term-header {
+            background: #161b22;
+            border-bottom: 1px solid var(--border-color);
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #8b949e;
+        }
 
-async fn handle_socket(socket: WebSocket, tx: Arc<broadcast::Sender<String>>) {
-    let (mut sender, mut receiver) = socket.split();
-    let mut rx = tx.subscribe();
+        .term-dots { display: flex; gap: 6px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot-red { background: #ff5f56; }
+        .dot-yellow { background: #ffbd2e; }
+        .dot-green { background: #27c93f; }
 
-    let mut send_task = tokio::spawn(async move {
-        while let Ok(msg) = rx.recv().await {
-            if sender.send(Message::Text(msg)).await.is_err() {
-                break;
+        .term-body {
+            padding: 12px;
+            flex-grow: 1;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.82rem;
+            line-height: 1.45;
+            color: #e6edf3;
+            white-space: pre-wrap;
+        }
+
+        .prompt { color: #8b949e; margin-bottom: 8px; }
+        .log-actuator { color: var(--purple); }
+        .log-guardian { color: var(--blue); }
+        .log-child { color: var(--green); }
+        .log-temp { color: var(--yellow); }
+        .log-warn { color: var(--yellow); font-weight: bold; }
+        .log-crit { color: var(--red); font-weight: bold; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="title-group">
+            <div class="live-dot"></div>
+            <h1>Six_In_Sync / Guardian-loop System Cluster</h1>
+        </div>
+        <div id="statusBanner" class="banner CLEAR">CLEAR</div>
+        <button id="audioBtn" class="enable-btn" onclick="enableAudioAndNotifications()">🔔 Enable Sound Alerts</button>
+    </header>
+
+    <div class="grid">
+        <!-- Terminal 1: Actuator -->
+        <div class="term-card">
+            <div class="term-header">
+                <span>1. lindsay@LAPTOP-TAN231BG: ~/Six_In_Sync/Gurdian-loop (actuator-sim)</span>
+                <div class="term-dots"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>
+            </div>
+            <div id="termActuator" class="term-body">
+                <div class="prompt">lindsay@LAPTOP-TAN231BG:~/Six_In_Sync/Gurdian-loop$ ./target/debug/actuator-sim</div>
+                <div>ACTUATOR READY - Waiting for window RPC requests...</div>
+            </div>
+        </div>
+
+        <!-- Terminal 2: Guardian -->
+        <div class="term-card">
+            <div class="term-header">
+                <span>2. lindsay@LAPTOP-TAN231BG: ~/Six_In_Sync/Gurdian-loop (guardian)</span>
+                <div class="term-dots"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>
+            </div>
+            <div id="termGuardian" class="term-body">
+                <div class="prompt">lindsay@LAPTOP-TAN231BG:~/Six_In_Sync/Gurdian-loop$ cargo run --bin dashboard</div>
+                <div>GUARDIAN READY - Waiting for sensor events...</div>
+            </div>
+        </div>
+
+        <!-- Terminal 3: Child Sensor -->
+        <div class="term-card">
+            <div class="term-header">
+                <span>3. lindsay@LAPTOP-TAN231BG: ~/Six_In_Sync/Gurdian-loop (child-sensor-sim)</span>
+                <div class="term-dots"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>
+            </div>
+            <div id="termChild" class="term-body">
+                <div class="prompt">lindsay@LAPTOP-TAN231BG:~/Six_In_Sync/Gurdian-loop$ ./target/debug/child-sensor-sim</div>
+            </div>
+        </div>
+
+        <!-- Terminal 4: Temperature Sensor -->
+        <div class="term-card">
+            <div class="term-header">
+                <span>4. lindsay@LAPTOP-TAN231BG: ~/Six_In_Sync/Gurdian-loop (temp-sensor-sim)</span>
+                <div class="term-dots"><div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div></div>
+            </div>
+            <div id="termTemp" class="term-body">
+                <div class="prompt">lindsay@LAPTOP-TAN231BG:~/Six_In_Sync/Gurdian-loop$ ./target/debug/temp-sensor-sim</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let audioContext = null;
+        let audioEnabled = false;
+
+        function enableAudioAndNotifications() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            audioEnabled = true;
+            if ("Notification" in window) Notification.requestPermission();
+            const btn = document.getElementById('audioBtn');
+            btn.innerText = "✓ Sound & Push Active";
+            btn.classList.add('active');
+        }
+
+        function playWarningSound() {
+            if (!audioEnabled || !audioContext) return;
+            const now = audioContext.currentTime;
+            [0, 0.25].forEach(offset => {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, now + offset);
+                gain.gain.setValueAtTime(0.3, now + offset);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + offset + 0.18);
+                osc.connect(gain); gain.connect(audioContext.destination);
+                osc.start(now + offset); osc.stop(now + offset + 0.2);
+            });
+        }
+
+        function playEmergencySound() {
+            if (!audioEnabled || !audioContext) return;
+            const now = audioContext.currentTime;
+            [0, 0.2, 0.4].forEach(offset => {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(1200, now + offset);
+                osc.frequency.exponentialRampToValueAtTime(600, now + offset + 0.15);
+                gain.gain.setValueAtTime(0.5, now + offset);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + offset + 0.18);
+                osc.connect(gain); gain.connect(audioContext.destination);
+                osc.start(now + offset); osc.stop(now + offset + 0.2);
+            });
+        }
+
+        function appendLog(termId, text, className) {
+            const term = document.getElementById(termId);
+            const line = document.createElement('div');
+            line.className = className || '';
+            line.innerText = text;
+            term.appendChild(line);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        let lastState = "CLEAR";
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.log_text) {
+                const txt = data.log_text;
+                
+                // Route log lines to the correct terminal based on content prefixes
+                if (txt.includes("ACTUATOR") || txt.includes("Window position") || txt.includes("ACTUATION")) {
+                    appendLog('termActuator', txt, 'log-actuator');
+                } else if (txt.includes("[CHILD_SENSOR]") || txt.includes("child_present")) {
+                    appendLog('termChild', txt, 'log-child');
+                } else if (txt.includes("[TEMP_SENSOR]") || txt.includes("temperature_celsius") || txt.includes("°C")) {
+                    appendLog('termTemp', txt, 'log-temp');
+                } else {
+                    let cls = 'log-guardian';
+                    if (txt.includes("CRITICAL")) cls = 'log-crit';
+                    else if (txt.includes("WARNING")) cls = 'log-warn';
+                    appendLog('termGuardian', txt, cls);
+                }
             }
-        }
-    });
 
-    let mut recv_task = tokio::spawn(async move {
-        while let Some(Ok(_)) = receiver.next().await {}
-    });
+            // Update top state status banner
+            const banner = document.getElementById('statusBanner');
+            banner.innerText = data.state;
+            banner.className = 'banner ' + data.state;
 
-    tokio::select! {
-        _ = (&mut send_task) => recv_task.abort(),
-        _ = (&mut recv_task) => send_task.abort(),
-    };
-}
-
-async fn run_guardian_wrapper(tx: Arc<broadcast::Sender<String>>) {
-    let child_res = Command::new("./target/debug/guardian")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn();
-
-    let mut child = match child_res {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Failed to start ./target/debug/guardian: {}", e);
-            return;
-        }
-    };
-
-    let stdout = child.stdout.take().expect("Failed to open stdout");
-    let mut reader = BufReader::new(stdout).lines();
-
-    let mut current_state = "CLEAR".to_string();
-    let mut child_detected = false;
-    let mut current_temp = "--".to_string();
-    let mut window_pos = "0".to_string();
-
-    while let Ok(Some(line)) = reader.next_line().await {
-        println!("[Guardian Output] {}", line);
-
-        let mut level = "";
-        if line.contains("CRITICAL") {
-            level = "crit";
-            current_state = "CRITICAL".to_string();
-            child_detected = true;
-            window_pos = "25".to_string();
-        } else if line.contains("WARNING") {
-            level = "warn";
-            current_state = "WARNING".to_string();
-            child_detected = true;
-        } else if line.contains("MONITORING") {
-            current_state = "MONITORING".to_string();
-            child_detected = true;
-        } else if line.contains("CLEAR") {
-            current_state = "CLEAR".to_string();
-            child_detected = false;
-        }
-
-        if line.contains("Window position") || line.contains("ACTUATION") || line.contains("mitigation") {
-            level = "actuation";
-        }
-
-        // Extract temperature if found
-        if let Some(pos) = line.find("°C") {
-            let slice = &line[..pos];
-            if let Some(num_start) = slice.rfind(|c: char| !c.is_numeric() && c != '.') {
-                current_temp = slice[num_start + 1..].trim().to_string();
+            if (data.state === "WARNING" && lastState !== "WARNING") {
+                playWarningSound();
+            } else if (data.state === "CRITICAL" && lastState !== "CRITICAL") {
+                playEmergencySound();
             }
-        }
 
-        let update = StateUpdate {
-            r#type: "state_update".to_string(),
-            state: current_state.clone(),
-            child: child_detected,
-            temp: current_temp.clone(),
-            window: window_pos.clone(),
-            log_text: Some(line),
-            log_level: Some(level.to_string()),
+            lastState = data.state;
         };
-
-        if let Ok(json_str) = serde_json::to_string(&update) {
-            let _ = tx.send(json_str);
-        }
-    }
-}
+    </script>
+</body>
+</html>
