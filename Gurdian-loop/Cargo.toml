@@ -6,6 +6,9 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 
+common = { path = "../../tooling/fault-lib/src/common" }
+fault_lib = { path = "../../tooling/fault-lib/src/fault_lib" }
+
 reqwest = {
     version = "0.12",
     default-features = false,

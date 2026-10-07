@@ -2,19 +2,9 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 
-use up_rust::{
-    UListener,
-    UMessage,
-    UMessageBuilder,
-    UPayloadFormat,
-    UTransport,
-    UUri,
-};
+use up_rust::{UListener, UMessage, UMessageBuilder, UPayloadFormat, UTransport, UUri};
 
-use up_transport_zenoh::{
-    zenoh_config,
-    UPTransportZenoh,
-};
+use up_transport_zenoh::{zenoh_config, UPTransportZenoh};
 
 const AUTHORITY: &str = "guardian-demo";
 
@@ -29,11 +19,9 @@ const AUTHORITY: &str = "guardian-demo";
 // 8002 -> cabin temperature topic
 //
 
-const CHILD_TOPIC: &str =
-    "//guardian-demo/1001/1/8001";
+const CHILD_TOPIC: &str = "//guardian-demo/1001/1/8001";
 
-const TEMPERATURE_TOPIC: &str =
-    "//guardian-demo/1002/1/8002";
+const TEMPERATURE_TOPIC: &str = "//guardian-demo/1002/1/8002";
 
 // ============================================================
 // ACTUATION RPC
@@ -42,16 +30,13 @@ const TEMPERATURE_TOPIC: &str =
 // Guardian sends an RPC request to this method.
 //
 
-const SET_WINDOW_POSITION: &str =
-    "//guardian-demo/2001/1/0001";
+const SET_WINDOW_POSITION: &str = "//guardian-demo/2001/1/0001";
 
 // Guardian's reply address.
 //
 // The actuator sends its RPC response back here.
 //
-const GUARDIAN_REPLY: &str =
-    "//guardian-demo/1000/1/0000";
-
+const GUARDIAN_REPLY: &str = "//guardian-demo/1000/1/0000";
 
 // ============================================================
 // GUARDIAN STATE
@@ -76,7 +61,6 @@ impl GuardianState {
     }
 }
 
-
 // ============================================================
 // CHILD SENSOR EVENT
 // ============================================================
@@ -89,7 +73,6 @@ struct ChildPresenceEvent {
     timestamp_ms: u64,
 }
 
-
 // ============================================================
 // TEMPERATURE SENSOR EVENT
 // ============================================================
@@ -100,7 +83,6 @@ struct CabinTemperatureEvent {
     timestamp_ms: u64,
     sensor_status: String,
 }
-
 
 // ============================================================
 // GUARDIAN INTERNAL STATE
@@ -169,11 +151,7 @@ impl GuardianData {
             println!(" GUARDIAN STATE CHANGE");
             println!("==============================================");
 
-            println!(
-                " {} -> {}",
-                old_state.as_str(),
-                self.state.as_str()
-            );
+            println!(" {} -> {}", old_state.as_str(), self.state.as_str());
 
             println!("==============================================");
             println!();
@@ -218,7 +196,6 @@ impl GuardianData {
     }
 }
 
-
 // ============================================================
 // SENSOR / GUARDIAN LISTENER
 // ============================================================
@@ -233,7 +210,6 @@ struct GuardianListener {
     transport: Arc<UPTransportZenoh>,
 }
 
-
 // ============================================================
 // SENSOR MESSAGE HANDLER
 // ============================================================
@@ -241,7 +217,6 @@ struct GuardianListener {
 #[async_trait]
 impl UListener for GuardianListener {
     async fn on_receive(&self, message: UMessage) {
-
         println!();
         println!("----------------------------------------------");
         println!(" Guardian received uProtocol message");
@@ -255,9 +230,7 @@ impl UListener for GuardianListener {
             Some(payload) => payload,
 
             None => {
-                eprintln!(
-                    "[GUARDIAN] Received message without payload"
-                );
+                eprintln!("[GUARDIAN] Received message without payload");
 
                 return;
             }
@@ -271,19 +244,13 @@ impl UListener for GuardianListener {
             Ok(value) => value,
 
             Err(error) => {
-                eprintln!(
-                    "[GUARDIAN] Invalid UTF-8 payload: {}",
-                    error
-                );
+                eprintln!("[GUARDIAN] Invalid UTF-8 payload: {}", error);
 
                 return;
             }
         };
 
-        println!(
-            "[GUARDIAN] Raw payload: {}",
-            text
-        );
+        println!("[GUARDIAN] Raw payload: {}", text);
 
         // ----------------------------------------------------
         // Lock Guardian state
@@ -296,45 +263,25 @@ impl UListener for GuardianListener {
         // ----------------------------------------------------
 
         if self.topic == CHILD_TOPIC {
+            let event: ChildPresenceEvent = match serde_json::from_str(text) {
+                Ok(value) => value,
 
-            let event: ChildPresenceEvent =
-                match serde_json::from_str(text) {
+                Err(error) => {
+                    eprintln!("[GUARDIAN] Invalid child event: {}", error);
 
-                    Ok(value) => value,
+                    return;
+                }
+            };
 
-                    Err(error) => {
-                        eprintln!(
-                            "[GUARDIAN] Invalid child event: {}",
-                            error
-                        );
+            println!("[GUARDIAN] Child event:");
 
-                        return;
-                    }
-                };
+            println!("  present    = {}", event.present);
 
-            println!(
-                "[GUARDIAN] Child event:"
-            );
+            println!("  confidence = {}", event.confidence);
 
-            println!(
-                "  present    = {}",
-                event.present
-            );
+            println!("  zone       = {}", event.zone);
 
-            println!(
-                "  confidence = {}",
-                event.confidence
-            );
-
-            println!(
-                "  zone       = {}",
-                event.zone
-            );
-
-            println!(
-                "  timestamp  = {}",
-                event.timestamp_ms
-            );
+            println!("  timestamp  = {}", event.timestamp_ms);
 
             data.child_present = event.present;
         }
@@ -344,51 +291,32 @@ impl UListener for GuardianListener {
         // ----------------------------------------------------
 
         if self.topic == TEMPERATURE_TOPIC {
+            let event: CabinTemperatureEvent = match serde_json::from_str(text) {
+                Ok(value) => value,
 
-            let event: CabinTemperatureEvent =
-                match serde_json::from_str(text) {
+                Err(error) => {
+                    eprintln!("[GUARDIAN] Invalid temperature event: {}", error);
 
-                    Ok(value) => value,
+                    return;
+                }
+            };
 
-                    Err(error) => {
-                        eprintln!(
-                            "[GUARDIAN] Invalid temperature event: {}",
-                            error
-                        );
+            println!("[GUARDIAN] Temperature event:");
 
-                        return;
-                    }
-                };
+            println!("  temperature = {:.1}°C", event.temperature_celsius);
 
-            println!(
-                "[GUARDIAN] Temperature event:"
-            );
+            println!("  status      = {}", event.sensor_status);
 
-            println!(
-                "  temperature = {:.1}°C",
-                event.temperature_celsius
-            );
+            println!("  timestamp   = {}", event.timestamp_ms);
 
-            println!(
-                "  status      = {}",
-                event.sensor_status
-            );
-
-            println!(
-                "  timestamp   = {}",
-                event.timestamp_ms
-            );
-
-            data.temperature =
-                event.temperature_celsius;
+            data.temperature = event.temperature_celsius;
         }
 
         // ----------------------------------------------------
         // UPDATE GUARDIAN STATE
         // ----------------------------------------------------
 
-        let should_mitigate =
-            data.update_state();
+        let should_mitigate = data.update_state();
 
         // We no longer need the Mutex lock.
         drop(data);
@@ -398,39 +326,25 @@ impl UListener for GuardianListener {
         // ----------------------------------------------------
 
         if should_mitigate {
-
             println!();
             println!("==============================================");
             println!(" GUARDIAN MITIGATION");
             println!("==============================================");
 
-            println!(
-                "[GUARDIAN] CRITICAL condition detected."
-            );
+            println!("[GUARDIAN] CRITICAL condition detected.");
 
-            println!(
-                "[GUARDIAN] Requesting window opening..."
-            );
+            println!("[GUARDIAN] Requesting window opening...");
 
-            let transport =
-                self.transport.clone();
+            let transport = self.transport.clone();
 
             tokio::spawn(async move {
-
-                if let Err(error) =
-                    request_window_open(transport).await
-                {
-                    eprintln!(
-                        "[GUARDIAN] Mitigation failed: {}",
-                        error
-                    );
+                if let Err(error) = request_window_open(transport).await {
+                    eprintln!("[GUARDIAN] Mitigation failed: {}", error);
                 }
-
             });
         }
     }
 }
-
 
 // ============================================================
 // ACTUATION RESPONSE LISTENER
@@ -442,15 +356,9 @@ impl UListener for GuardianListener {
 
 struct ActuationResponseListener;
 
-
 #[async_trait]
 impl UListener for ActuationResponseListener {
-
-    async fn on_receive(
-        &self,
-        message: UMessage,
-    ) {
-
+    async fn on_receive(&self, message: UMessage) {
         println!();
         println!("==============================================");
         println!(" ACTUATION RESPONSE");
@@ -461,13 +369,10 @@ impl UListener for ActuationResponseListener {
         // ----------------------------------------------------
 
         let payload = match message.payload {
-
             Some(payload) => payload,
 
             None => {
-                eprintln!(
-                    "[GUARDIAN] Actuation response has no payload"
-                );
+                eprintln!("[GUARDIAN] Actuation response has no payload");
 
                 return;
             }
@@ -478,43 +383,27 @@ impl UListener for ActuationResponseListener {
         // ----------------------------------------------------
 
         match std::str::from_utf8(&payload) {
-
             Ok(text) => {
+                println!("[GUARDIAN] Actuator response:");
 
-                println!(
-                    "[GUARDIAN] Actuator response:"
-                );
-
-                println!(
-                    "  {}",
-                    text
-                );
+                println!("  {}", text);
             }
 
             Err(error) => {
-
-                eprintln!(
-                    "[GUARDIAN] Invalid actuator response: {}",
-                    error
-                );
+                eprintln!("[GUARDIAN] Invalid actuator response: {}", error);
 
                 return;
             }
         }
 
         println!();
-        println!(
-            "✓ Guardian mitigation request completed."
-        );
+        println!("✓ Guardian mitigation request completed.");
 
-        println!(
-            "=============================================="
-        );
+        println!("==============================================");
 
         println!();
     }
 }
-
 
 // ============================================================
 // SEND WINDOW ACTUATION RPC
@@ -535,93 +424,61 @@ impl UListener for ActuationResponseListener {
 async fn request_window_open(
     transport: Arc<UPTransportZenoh>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
-    println!(
-        "[GUARDIAN] RPC method: {}",
-        SET_WINDOW_POSITION
-    );
+    println!("[GUARDIAN] RPC method: {}", SET_WINDOW_POSITION);
 
     // --------------------------------------------------------
     // Convert method URI
     // --------------------------------------------------------
 
-    let method =
-        UUri::try_from(
-            SET_WINDOW_POSITION
-        )?;
+    let method = UUri::try_from(SET_WINDOW_POSITION)?;
 
     // --------------------------------------------------------
     // Convert reply URI
     // --------------------------------------------------------
 
-    let reply_to =
-        UUri::try_from(
-            GUARDIAN_REPLY
-        )?;
+    let reply_to = UUri::try_from(GUARDIAN_REPLY)?;
 
     // --------------------------------------------------------
     // Build command
     // --------------------------------------------------------
 
-    let command =
-        serde_json::json!({
-            "window": "rear-left",
-            "percentage": 25
-        });
+    let command = serde_json::json!({
+        "window": "rear-left",
+        "percentage": 25
+    });
 
-    let command_json =
-        command.to_string();
+    let command_json = command.to_string();
 
-    println!(
-        "[GUARDIAN] Command: {}",
-        command_json
-    );
+    println!("[GUARDIAN] Command: {}", command_json);
 
     // --------------------------------------------------------
     // Build uProtocol RPC request
     // --------------------------------------------------------
 
-    let message =
-        UMessageBuilder::request(
-            method,
-            reply_to,
-            5000,
-        )
-        .build_with_payload(
-            command_json,
-            UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
-        )?;
+    let message = UMessageBuilder::request(method, reply_to, 5000)
+        .build_with_payload(command_json, UPayloadFormat::UPAYLOAD_FORMAT_TEXT)?;
 
     // --------------------------------------------------------
     // Send request
     // --------------------------------------------------------
 
-    transport
-        .send(message)
-        .await?;
+    transport.send(message).await?;
 
-    println!(
-        "[GUARDIAN] ✓ Window RPC request sent."
-    );
+    println!("[GUARDIAN] ✓ Window RPC request sent.");
 
-    println!(
-        "=============================================="
-    );
+    println!("==============================================");
 
     println!();
 
     Ok(())
 }
 
-
 // ============================================================
 // MAIN
 // ============================================================
 
 #[tokio::main]
-async fn main()
-    -> Result<(), Box<dyn std::error::Error>>
-{
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=================================");
     println!(" Guardian Loop - Stage 2");
     println!("=================================");
@@ -632,163 +489,95 @@ async fn main()
     // ========================================================
 
     let transport = Arc::new(
-        UPTransportZenoh::builder(
-            AUTHORITY
-        )?
-        .with_config(
-            zenoh_config::Config::default()
-        )
-        .build()
-        .await?,
+        UPTransportZenoh::builder(AUTHORITY)?
+            .with_config(zenoh_config::Config::default())
+            .build()
+            .await?,
     );
 
-    println!(
-        "[GUARDIAN] uProtocol / Zenoh transport started."
-    );
+    println!("[GUARDIAN] uProtocol / Zenoh transport started.");
 
     println!();
-
 
     // ========================================================
     // CREATE SENSOR URIs
     // ========================================================
 
-    let child_topic =
-        UUri::try_from(
-            CHILD_TOPIC
-        )?;
+    let child_topic = UUri::try_from(CHILD_TOPIC)?;
 
-    let temperature_topic =
-        UUri::try_from(
-            TEMPERATURE_TOPIC
-        )?;
-
+    let temperature_topic = UUri::try_from(TEMPERATURE_TOPIC)?;
 
     // ========================================================
     // CREATE ACTUATION URIs
     // ========================================================
 
-    let actuator_method =
-        UUri::try_from(
-            SET_WINDOW_POSITION
-        )?;
+    let actuator_method = UUri::try_from(SET_WINDOW_POSITION)?;
 
-    let guardian_reply =
-        UUri::try_from(
-            GUARDIAN_REPLY
-        )?;
-
+    let guardian_reply = UUri::try_from(GUARDIAN_REPLY)?;
 
     // ========================================================
     // SHARED GUARDIAN STATE
     // ========================================================
 
-    let data =
-        Arc::new(
-            Mutex::new(
-                GuardianData::new()
-            )
-        );
-
+    let data = Arc::new(Mutex::new(GuardianData::new()));
 
     // ========================================================
     // CHILD SENSOR LISTENER
     // ========================================================
 
-    let child_listener =
-        Arc::new(
-            GuardianListener {
-                data: data.clone(),
-                topic: CHILD_TOPIC,
-                transport: transport.clone(),
-            }
-        );
-
+    let child_listener = Arc::new(GuardianListener {
+        data: data.clone(),
+        topic: CHILD_TOPIC,
+        transport: transport.clone(),
+    });
 
     // ========================================================
     // TEMPERATURE SENSOR LISTENER
     // ========================================================
 
-    let temperature_listener =
-        Arc::new(
-            GuardianListener {
-                data: data.clone(),
-                topic: TEMPERATURE_TOPIC,
-                transport: transport.clone(),
-            }
-        );
-
+    let temperature_listener = Arc::new(GuardianListener {
+        data: data.clone(),
+        topic: TEMPERATURE_TOPIC,
+        transport: transport.clone(),
+    });
 
     // ========================================================
     // REGISTER CHILD SENSOR
     // ========================================================
 
     transport
-        .register_listener(
-            &child_topic,
-            None,
-            child_listener,
-        )
+        .register_listener(&child_topic, None, child_listener)
         .await?;
 
-    println!(
-        "[GUARDIAN] ✓ Child sensor subscribed."
-    );
+    println!("[GUARDIAN] ✓ Child sensor subscribed.");
 
-    println!(
-        "             {}",
-        CHILD_TOPIC
-    );
-
+    println!("             {}", CHILD_TOPIC);
 
     // ========================================================
     // REGISTER TEMPERATURE SENSOR
     // ========================================================
 
     transport
-        .register_listener(
-            &temperature_topic,
-            None,
-            temperature_listener,
-        )
+        .register_listener(&temperature_topic, None, temperature_listener)
         .await?;
 
-    println!(
-        "[GUARDIAN] ✓ Temperature sensor subscribed."
-    );
+    println!("[GUARDIAN] ✓ Temperature sensor subscribed.");
 
-    println!(
-        "             {}",
-        TEMPERATURE_TOPIC
-    );
-
+    println!("             {}", TEMPERATURE_TOPIC);
 
     // ========================================================
     // REGISTER ACTUATION RESPONSE LISTENER
     // ========================================================
 
-    let response_listener =
-        Arc::new(
-            ActuationResponseListener
-        );
+    let response_listener = Arc::new(ActuationResponseListener);
 
     transport
-        .register_listener(
-            &actuator_method,
-            Some(&guardian_reply),
-            response_listener,
-        )
+        .register_listener(&actuator_method, Some(&guardian_reply), response_listener)
         .await?;
 
-    println!(
-        "[GUARDIAN] ✓ Actuation response listener registered."
-    );
+    println!("[GUARDIAN] ✓ Actuation response listener registered.");
 
-    println!(
-        "             Reply URI: {}",
-        GUARDIAN_REPLY
-    );
-
+    println!("             Reply URI: {}", GUARDIAN_REPLY);
 
     // ========================================================
     // READY
@@ -799,66 +588,41 @@ async fn main()
     println!(" GUARDIAN READY");
     println!("==============================================");
 
-    println!(
-        "Child topic:"
-    );
+    println!("Child topic:");
 
-    println!(
-        "  {}",
-        CHILD_TOPIC
-    );
+    println!("  {}", CHILD_TOPIC);
 
     println!();
 
-    println!(
-        "Temperature topic:"
-    );
+    println!("Temperature topic:");
 
-    println!(
-        "  {}",
-        TEMPERATURE_TOPIC
-    );
+    println!("  {}", TEMPERATURE_TOPIC);
 
     println!();
 
-    println!(
-        "Actuation RPC:"
-    );
+    println!("Actuation RPC:");
 
-    println!(
-        "  {}",
-        SET_WINDOW_POSITION
-    );
+    println!("  {}", SET_WINDOW_POSITION);
 
     println!();
 
-    println!(
-        "Waiting for sensor events..."
-    );
+    println!("Waiting for sensor events...");
 
     println!();
-
 
     // ========================================================
     // KEEP GUARDIAN RUNNING
     // ========================================================
 
-    tokio::signal::ctrl_c()
-        .await?;
+    tokio::signal::ctrl_c().await?;
 
     println!();
 
-    println!(
-        "=============================================="
-    );
+    println!("==============================================");
 
-    println!(
-        " Guardian shutting down."
-    );
+    println!(" Guardian shutting down.");
 
-    println!(
-        "=============================================="
-    );
+    println!("==============================================");
 
     Ok(())
 }

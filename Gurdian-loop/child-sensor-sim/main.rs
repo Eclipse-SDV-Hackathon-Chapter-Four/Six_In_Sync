@@ -3,23 +3,13 @@ use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{sleep, Duration};
 
-use up_rust::{
-    UMessageBuilder,
-    UPayloadFormat,
-    UTransport,
-    UUri,
-};
+use up_rust::{UMessageBuilder, UPayloadFormat, UTransport, UUri};
 
-use up_transport_zenoh::{
-    zenoh_config,
-    UPTransportZenoh,
-};
+use up_transport_zenoh::{zenoh_config, UPTransportZenoh};
 
 const AUTHORITY: &str = "guardian-demo";
 
-const CHILD_TOPIC: &str =
-    "//guardian-demo/1001/1/8001";
-
+const CHILD_TOPIC: &str = "//guardian-demo/1001/1/8001";
 
 #[derive(Debug, Serialize)]
 struct ChildPresenceEvent {
@@ -63,7 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     loop {
-
         for (present, confidence) in scenarios {
             let event = ChildPresenceEvent {
                 present,
@@ -75,17 +64,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let json = serde_json::to_string(&event)?;
 
             let message = UMessageBuilder::publish(topic.clone())
-                .build_with_payload(
-                    json,
-                    UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
-                )?;
+                .build_with_payload(json, UPayloadFormat::UPAYLOAD_FORMAT_TEXT)?;
 
             transport.send(message).await?;
 
-            println!(
-                "[CHILD SENSOR] child_present={}",
-                present
-            );
+            println!("[CHILD SENSOR] child_present={}", present);
 
             sleep(Duration::from_secs(5)).await;
         }

@@ -2,22 +2,13 @@ use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{sleep, Duration};
 
-use up_rust::{
-    UMessageBuilder,
-    UPayloadFormat,
-    UTransport,
-    UUri,
-};
+use up_rust::{UMessageBuilder, UPayloadFormat, UTransport, UUri};
 
-use up_transport_zenoh::{
-    zenoh_config,
-    UPTransportZenoh,
-};
+use up_transport_zenoh::{zenoh_config, UPTransportZenoh};
 
 const AUTHORITY: &str = "guardian-demo";
 
-const TEMPERATURE_TOPIC: &str =
-    "//guardian-demo/1002/1/8002";
+const TEMPERATURE_TOPIC: &str = "//guardian-demo/1002/1/8002";
 
 #[derive(Debug, Serialize)]
 struct CabinTemperatureEvent {
@@ -51,16 +42,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Deliberately create the Stage-1 scenario.
-    let temperatures = [
-        26.0,
-        26.0,
-        36.0,
-        43.0,
-        43.0,
-    ];
+    let temperatures = [26.0, 26.0, 36.0, 43.0, 43.0];
 
     loop {
-
         for temperature in temperatures {
             let event = CabinTemperatureEvent {
                 temperature_celsius: temperature,
@@ -71,17 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let json = serde_json::to_string(&event)?;
 
             let message = UMessageBuilder::publish(topic.clone())
-                .build_with_payload(
-                    json,
-                    UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
-                )?;
+                .build_with_payload(json, UPayloadFormat::UPAYLOAD_FORMAT_TEXT)?;
 
             transport.send(message).await?;
 
-            println!(
-                "[TEMP SENSOR] temperature={:.1}°C",
-                temperature
-            );
+            println!("[TEMP SENSOR] temperature={:.1}°C", temperature);
 
             sleep(Duration::from_secs(5)).await;
         }
