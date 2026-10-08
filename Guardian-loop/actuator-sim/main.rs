@@ -1,22 +1,5 @@
-// use async_trait::async_trait;
-// use std::sync::Arc;
-
-// use up_rust::{UListener, UMessage, UMessageBuilder, UPayloadFormat, UTransport, UUri};
-
-// use up_transport_zenoh::{zenoh_config, UPTransportZenoh};
-
-// const AUTHORITY: &str = "guardian-demo";
-
-// ============================================================
-// SOVD
-// ============================================================
-// use std::time::Duration;
-
 use async_trait::async_trait;
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::sync::Arc;
 
 use up_rust::{
     UListener,
@@ -33,38 +16,16 @@ use up_transport_zenoh::{
 };
 
 const AUTHORITY: &str = "guardian-demo";
-// Temporary name for smoke test
-//const WINDOW_ACTUATION_FAILED: &str = "CabinTempSensorStuck";
 
-#[derive(serde::Serialize)]
-struct AuthorizationRequest {
-    client_id: String,
-    client_secret: String,
-}
-
-#[derive(serde::Deserialize)]
-struct AuthorizationResponse {
-    access_token: String,
-}
-
-#[derive(serde::Serialize)]
-struct LockRequest {
-    lock_expiration: u64,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct LockResponse {
-    id: String,
-}
+// ============================================================
+// SOVD
+// ============================================================
+use std::time::Duration;
 
 #[derive(Clone)]
 struct SovdClient {
     http: reqwest::Client,
     base_url: String,
-    component_id: String,
-    service_id: String,
-    bearer_token: String,
-    lock_id: Arc<Mutex<Option<String>>>,
 }
 
 #[derive(Debug)]
@@ -76,16 +37,12 @@ struct SovdActuationResult {
 #[derive(Debug)]
 enum SovdClientError {
     InvalidWindow(String),
-    InvalidAuthorizationResponse(String),
-
     Http(reqwest::Error),
-
     Rejected {
         status: reqwest::StatusCode,
         body: String,
     },
 }
-
 
 impl std::fmt::Display for SovdClientError {
     fn fmt(
@@ -98,14 +55,6 @@ impl std::fmt::Display for SovdClientError {
                     formatter,
                     "unsupported window '{}'",
                     window
-                )
-            }
-
-            Self::InvalidAuthorizationResponse(error) => {
-                write!(
-                    formatter,
-                    "invalid CDA authorization response: {}",
-                    error
                 )
             }
 
@@ -138,47 +87,105 @@ impl From<reqwest::Error> for SovdClientError {
 }
 
 impl SovdClient {
-    async fn new(
+    fn new(
         base_url: impl Into<String>,
-        component_id: impl Into<String>,
-        service_id: impl Into<String>,
-        client_id: &str,
-        client_secret: &str,
-    ) -> Result<Self, SovdClientError> {
-        let base_url =
-            base_url
-                .into()
-                .trim_end_matches('/')
-                .to_string();
-
+    ) -> Result<Self, reqwest::Error> {
         let http =
             reqwest::Client::builder()
-                .connect_timeout(Duration::from_secs(2))
-                .timeout(Duration::from_secs(5))
+                .connect_timeout(
+                    Duration::from_secs(2)
+                )
+                .timeout(
+                    Duration::from_secs(5)
+                )
                 .build()?;
 
-        let authorization_url =
-            format!("{}/authorize", base_url);
+        Ok(Self {
+            http,
+            base_url:
+                base_url
+                    .into()
+                    .trim_end_matches('/')
+                    .to_string(),
+        })
+    }
 
-        let authorization_body =
-            AuthorizationRequest {
-                client_id: client_id.to_string(),
-                client_secret: client_secret.to_string(),
+    async fn set_window_position(
+        &self,
+        window: &str,
+        percentage: u8,
+    ) -> Result<
+        SovdActuationResult,
+        SovdClientError,
+    > {
+        let component_id =
+            match window {
+                "rear-left" => {
+                    "rear-left-door"
+                }
+
+                "rear-right" => {
+                    "rear-right-door"
+                }
+
+                "front-left" => {
+                    "front-left-door"
+                }
+
+                "front-right" => {
+                    "front-right-door"
+                }
+
+                other => {
+                    return Err(
+                        SovdClientError::InvalidWindow(
+                            other.to_string()
+                        )
+                    );
+                }
             };
 
+        /*
+         * PLACEHOLDER:
+         *
+         * Replace "window-position" and possibly
+         * the complete path after inspecting the
+         * CDA Swagger API and your MDD.
+         */
+        let url = format!(
+            "{}/components/{}/data/window-position",
+            self.base_url,
+            component_id,
+        );
+
+        let body =
+            serde_json::json!({
+                "value": percentage
+            });
+
         println!(
-            "[ACTUATOR] Requesting CDA access token from {}",
-            authorization_url
+            "[ACTUATOR] SOVD request:"
+        );
+
+        println!(
+            "  PUT {}",
+            url
+        );
+
+        println!(
+            "  Body: {}",
+            body
         );
 
         let response =
-            http
-                .post(&authorization_url)
-                .json(&authorization_body)
+            self.http
+                .put(&url)
+                .json(&body)
                 .send()
                 .await?;
 
-        let status = response.status();
+        let status =
+            response.status();
 
         let response_body =
             response
@@ -194,189 +201,20 @@ impl SovdClient {
             );
         }
 
-        let authorization_response:
-            AuthorizationResponse =
-                serde_json::from_str(&response_body)
-                    .map_err(|error| {
-                        SovdClientError::InvalidAuthorizationResponse(
-                            error.to_string()
-                        )
-                    })?;
+        Ok(
+            SovdActuationResult {
+                status:
+                    "COMPLETED".to_string(),
 
-        println!(
-            "[ACTUATOR] Token: {}",
-            authorization_response.access_token
-        );
-
-        if authorization_response.access_token.is_empty() {
-            return Err(
-                SovdClientError::InvalidAuthorizationResponse(
-                    "access_token was empty".to_string()
-                )
-            );
-        }
-
-        println!(
-            "[ACTUATOR] CDA access token obtained."
-        );
-
-        Ok(Self {
-            http,
-            base_url,
-            component_id: component_id.into(),
-            service_id: service_id.into(),
-            bearer_token: authorization_response.access_token,
-            lock_id: Arc::new(Mutex::new(None)),
-        })
-    }
-
-    //
-    async fn acquire_lock(
-        &self,
-    ) -> Result<String, SovdClientError> {
-
-        {
-            let guard =
-                self.lock_id.lock().unwrap();
-
-            if let Some(lock_id) = guard.clone() {
-                return Ok(lock_id);
+                details:
+                    if response_body.is_empty() {
+                        "CDA accepted window position"
+                            .to_string()
+                    } else {
+                        response_body
+                    },
             }
-        }
-
-        let url = format!(
-            "{}/components/{}/locks",
-            self.base_url,
-            self.component_id,
-        );
-
-        println!(
-            "[ACTUATOR] Acquiring SOVD lock..."
-        );
-
-        let response = self
-            .http
-            .post(&url)
-            .bearer_auth(&self.bearer_token)
-            .json(&LockRequest {
-                lock_expiration: 100000,
-            })
-            .send()
-            .await?;
-
-        let status = response.status();
-
-        let response_body =
-            response.text().await?;
-
-        println!(
-            "[ACTUATOR] Lock response body: {}",
-            response_body
-        );
-
-        if !status.is_success() {
-            return Err(
-                SovdClientError::Rejected {
-                    status,
-                    body: response_body,
-                }
-            );
-        }
-
-        let lock_response: LockResponse =
-            serde_json::from_str(&response_body)
-                .map_err(|e| {
-                    SovdClientError::InvalidAuthorizationResponse(
-                        e.to_string()
-                    )
-                })?;
-
-        println!(
-            "[ACTUATOR] Lock acquired: {}",
-            lock_response.id
-        );
-
-        {
-            let mut guard =
-                self.lock_id.lock().unwrap();
-
-            *guard =
-                Some(lock_response.id.clone());
-        }
-
-        Ok(lock_response.id)
-    }
-
-    //
-    async fn set_window_position(
-        &self,
-        window: &str,
-        percentage: u8,
-    ) -> Result<SovdActuationResult, SovdClientError> {
-        match window {
-            "rear-left" | "rear-right" | "front-left" | "front-right" => {}
-
-            other => {
-                return Err(SovdClientError::InvalidWindow(other.to_string()));
-            }
-        }
-
-        let lock_id =
-            self.acquire_lock().await?;
-
-        let url = format!(
-            "{}/components/{}/data/{}",
-            self.base_url, self.component_id, self.service_id,
-        );
-
-        /*
-         * This body is still dependent on the schema
-         * of the selected MDD service.
-         *
-         * Verify it using:
-         *
-         * GET /vehicle/v15/components/az3166/data/{service}/docs
-         */
-        let body = serde_json::json!({
-            "data": {
-                "value": percentage
-            }
-        });
-
-        println!("[ACTUATOR] SOVD request:");
-        println!("  PUT {}", url);
-        println!("  Body: {}", body);
-
-        let response = self
-            .http
-            .put(&url)
-            .bearer_auth(&self.bearer_token)
-            .json(&body)
-            .send()
-            .await?;
-
-        let status = response.status();
-        let response_body = response.text().await?;
-
-        if !status.is_success() {
-            return Err(SovdClientError::Rejected {
-                status,
-                body: response_body,
-            });
-        }
-
-        Ok(SovdActuationResult {
-            status: "COMPLETED".to_string(),
-
-            details: if response_body.is_empty() {
-                format!(
-                    "CDA accepted service '{}' for component '{}'",
-                    self.service_id, self.component_id,
-                )
-            } else {
-                response_body
-            },
-        })
+        )
     }
 }
 
@@ -387,7 +225,9 @@ impl SovdClient {
 // Guardian sends the request TO this URI.
 //
 
-const SET_WINDOW_POSITION: &str = "//guardian-demo/2001/1/0001";
+const SET_WINDOW_POSITION: &str =
+    "//guardian-demo/2001/1/0001";
+
 
 // ============================================================
 // GUARDIAN REPLY URI
@@ -399,7 +239,9 @@ const SET_WINDOW_POSITION: &str = "//guardian-demo/2001/1/0001";
 // Therefore the actuator can use this as its source filter.
 //
 
-const GUARDIAN_REPLY: &str = "//guardian-demo/1000/1/0000";
+const GUARDIAN_REPLY: &str =
+    "//guardian-demo/1000/1/0000";
+
 
 // ============================================================
 // ACTUATOR LISTENER
@@ -410,6 +252,7 @@ struct ActuatorListener {
     sovd_client: Arc<SovdClient>,
 }
 
+
 // ============================================================
 // WINDOW COMMAND
 // ============================================================
@@ -419,6 +262,7 @@ struct WindowCommand {
     window: String,
     percentage: u8,
 }
+
 
 // ============================================================
 // RPC REQUEST HANDLER
@@ -431,52 +275,74 @@ async fn send_rpc_response(
 ) {
     let response_json = response.to_string();
 
-    let response_message = match UMessageBuilder::response_for_request(&request.attributes)
-        .build_with_payload(response_json, UPayloadFormat::UPAYLOAD_FORMAT_JSON)
-    {
-        Ok(message) => message,
+    let response_message =
+        match UMessageBuilder::response_for_request(
+            &request.attributes,
+        )
+        .build_with_payload(
+            response_json,
+            UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+        ) {
+            Ok(message) => message,
 
-        Err(error) => {
-            eprintln!("[ACTUATOR] Failed to build RPC response: {}", error);
+            Err(error) => {
+                eprintln!(
+                    "[ACTUATOR] Failed to build RPC response: {}",
+                    error
+                );
 
-            return;
-        }
-    };
+                return;
+            }
+        };
 
     match transport.send(response_message).await {
         Ok(_) => {
-            println!("[ACTUATOR] RPC response sent.");
+            println!(
+                "[ACTUATOR] RPC response sent."
+            );
         }
 
         Err(error) => {
-            eprintln!("[ACTUATOR] Failed to send RPC response: {}", error);
+            eprintln!(
+                "[ACTUATOR] Failed to send RPC response: {}",
+                error
+            );
         }
     }
 }
 
 #[async_trait]
 impl UListener for ActuatorListener {
-    async fn on_receive(&self, message: UMessage) {
+    async fn on_receive(
+        &self,
+        message: UMessage,
+    ) {
         println!();
         println!("==============================================");
         println!(" ACTUATOR ADAPTER");
         println!("==============================================");
 
-        println!("[ACTUATOR] RPC request received");
+        println!(
+            "[ACTUATOR] RPC request received"
+        );
 
         // ====================================================
         // READ PAYLOAD
         // ====================================================
 
-        let payload = match message.payload.as_ref() {
-            Some(payload) => payload,
+        let payload =
+            match message.payload.as_ref() {
+                Some(payload) => payload,
 
-            None => {
-                eprintln!("[ACTUATOR] Request has no payload");
+                None => {
+                    eprintln!(
+                        "[ACTUATOR] Request has no payload"
+                    );
 
-                return;
-            }
-        };
+                    return;
+                }
+            };
+
 
         // ====================================================
         // CONVERT PAYLOAD TO UTF-8
@@ -486,52 +352,79 @@ impl UListener for ActuatorListener {
             Ok(value) => value,
 
             Err(error) => {
-                eprintln!("[ACTUATOR] Invalid UTF-8 payload: {}", error);
+                eprintln!(
+                    "[ACTUATOR] Invalid UTF-8 payload: {}",
+                    error
+                );
 
                 return;
             }
         };
 
-        println!("[ACTUATOR] Payload: {}", text);
+        println!(
+            "[ACTUATOR] Payload: {}",
+            text
+        );
+
 
         // ====================================================
         // PARSE WINDOW COMMAND
         // ====================================================
 
-        let command: WindowCommand = match serde_json::from_str(text) {
-            Ok(value) => value,
+        let command: WindowCommand =
+            match serde_json::from_str(text) {
 
-            Err(error) => {
-                eprintln!("[ACTUATOR] Invalid command: {}", error);
+                Ok(value) => value,
 
-                return;
-            }
-        };
+                Err(error) => {
+                    eprintln!(
+                        "[ACTUATOR] Invalid command: {}",
+                        error
+                    );
 
-        println!("[ACTUATOR] Window: {}", command.window);
+                    return;
+                }
+            };
 
-        println!("[ACTUATOR] Requested position: {}%", command.percentage);
+
+        println!(
+            "[ACTUATOR] Window: {}",
+            command.window
+        );
+
+        println!(
+            "[ACTUATOR] Requested position: {}%",
+            command.percentage
+        );
+
 
         // ====================================================
         // VALIDATE WINDOW POSITION
         // ====================================================
 
         if command.percentage > 100 {
-            let response = serde_json::json!({
-                "success": false,
-                "window": command.window,
-                "percentage": command.percentage,
-                "status": "INVALID_ARGUMENT",
-                "details":
-                    "percentage must be between 0 and 100"
-            });
+            let response =
+                serde_json::json!({
+                    "success": false,
+                    "window": command.window,
+                    "percentage": command.percentage,
+                    "status": "INVALID_ARGUMENT",
+                    "details":
+                        "percentage must be between 0 and 100"
+                });
 
-            send_rpc_response(&self.transport, &message, response).await;
+            send_rpc_response(
+                &self.transport,
+                &message,
+                response,
+            )
+            .await;
 
             return;
         }
 
-        let percentage = command.percentage;
+        let percentage =
+            command.percentage;
 
         // ====================================================
         // SIMULATED PHYSICAL ACTUATION
@@ -539,48 +432,75 @@ impl UListener for ActuatorListener {
 
         println!();
 
-        println!("🚗 SEND REQUEST TO SOVD");
+        println!(
+            "🚗 SEND REQUEST TO SOVD"
+        );
 
-        println!("   Window: {}", command.window);
+        println!(
+            "   Window: {}",
+            command.window
+        );
 
-        println!("   Target position: {}%", percentage);
+        println!(
+            "   Target position: {}%",
+            percentage
+        );
 
         println!();
-        println!("==============================================");
-        println!(" SOVD WINDOW ACTUATION");
-        println!("==============================================");
+        println!(
+            "=============================================="
+        );
+        println!(
+            " SOVD WINDOW ACTUATION"
+        );
+        println!(
+            "=============================================="
+        );
 
-        let result = self
-            .sovd_client
-            .set_window_position(&command.window, percentage)
-            .await;
+        let result =
+            self.sovd_client
+                .set_window_position(
+                    &command.window,
+                    percentage,
+                )
+                .await;
 
-        let response = match result {
-            Ok(result) => {
-                println!("[ACTUATOR] SOVD actuation completed.");
-                println!("[ACTUATOR] Details: {}", result.details);
+        let response =
+            match result {
+                Ok(result) => {
+                    println!(
+                        "[ACTUATOR] SOVD actuation completed."
+                    );
 
-                serde_json::json!({
-                    "success": true,
-                    "window": command.window,
-                    "percentage": percentage,
-                    "status": result.status,
-                    "details": result.details
-                })
-            }
+                    println!(
+                        "[ACTUATOR] Details: {}",
+                        result.details
+                    );
 
-            Err(error) => {
-                eprintln!("[ACTUATOR] SOVD actuation failed: {}", error);
+                    serde_json::json!({
+                        "success": true,
+                        "window": command.window,
+                        "percentage": percentage,
+                        "status": result.status,
+                        "details": result.details
+                    })
+                }
 
-                serde_json::json!({
-                    "success": false,
-                    "window": command.window,
-                    "percentage": percentage,
-                    "status": "FAILED",
-                    "details": error.to_string()
-                })
-            }
-    };
+                Err(error) => {
+                    eprintln!(
+                        "[ACTUATOR] SOVD actuation failed: {}",
+                        error
+                    );
+
+                    serde_json::json!({
+                        "success": false,
+                        "window": command.window,
+                        "percentage": percentage,
+                        "status": "FAILED",
+                        "details": error.to_string()
+                    })
+                }
+            };
         //
 
         // ====================================================
@@ -595,12 +515,15 @@ impl UListener for ActuatorListener {
         //         "status": "COMPLETED"
         //     });
 
+
         // let response_json =
         //     response.to_string();
+
 
         // println!(
         //     "[ACTUATOR] Sending RPC response..."
         // );
+
 
         // ====================================================
         // CREATE RESPONSE MESSAGE
@@ -613,23 +536,24 @@ impl UListener for ActuatorListener {
         // let response_message =
         //     match UMessageBuilder::response_for_request(
         //         &message.attributes,
-        // )
-        // .build_with_payload(
-        //     response_json,
-        //     UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
-        // ) {
+            // )
+            // .build_with_payload(
+            //     response_json,
+            //     UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
+            // ) {
 
-        //     Ok(message) => message,
+            //     Ok(message) => message,
 
-        //     Err(error) => {
-        //         eprintln!(
-        //             "[ACTUATOR] Failed to build response: {}",
-        //             error
-        //         );
+            //     Err(error) => {
+            //         eprintln!(
+            //             "[ACTUATOR] Failed to build response: {}",
+            //             error
+            //         );
 
-        //         return;
-        //     }
-        // };
+            //         return;
+            //     }
+            // };
+
 
         // ====================================================
         // SEND RESPONSE
@@ -651,128 +575,105 @@ impl UListener for ActuatorListener {
         //     }
         // }
 
-        println!("[ACTUATOR] Sending RPC response...");
+        println!(
+            "[ACTUATOR] Sending RPC response..."
+        );
 
-        send_rpc_response(&self.transport, &message, response).await;
+        send_rpc_response(
+            &self.transport,
+            &message,
+            response,
+        )
+        .await;
 
         println!();
     }
 }
+
 
 // ============================================================
 // MAIN
 // ============================================================
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main()
+    -> Result<(), Box<dyn std::error::Error>>
+{
     println!("=================================");
     println!(" Simulated Actuation Adapter");
     println!("=================================");
     println!();
 
+
     // ========================================================
     // DISPLAY CONFIGURATION
     // ========================================================
 
-    println!("RPC method:");
+    println!(
+        "RPC method:"
+    );
 
-    println!("  {}", SET_WINDOW_POSITION);
+    println!(
+        "  {}",
+        SET_WINDOW_POSITION
+    );
 
     println!();
 
-    println!("Source filter:");
+    println!(
+        "Source filter:"
+    );
 
-    println!("  {}", GUARDIAN_REPLY);
+    println!(
+        "  {}",
+        GUARDIAN_REPLY
+    );
 
     println!();
+
 
     // ========================================================
     // CREATE ZENOH / uPROTOCOL TRANSPORT
     // ========================================================
 
     let transport = Arc::new(
-        UPTransportZenoh::builder(AUTHORITY)?
-            .with_config(zenoh_config::Config::default())
-            .build()
-            .await?,
+        UPTransportZenoh::builder(
+            AUTHORITY
+        )?
+        .with_config(
+            zenoh_config::Config::default()
+        )
+        .build()
+        .await?,
     );
 
-    println!("[ACTUATOR] uProtocol / Zenoh transport started.");
+
+    println!(
+        "[ACTUATOR] uProtocol / Zenoh transport started."
+    );
 
     println!();
 
     // ========================================================
     // CREATE SOVD CLIENT
     // ========================================================
-
-    eprintln!(
-        "[ACTUATOR] Diagnostic fault reporting is disabled; the fault-lib dependency is not included."
-    );
-
     let cda_base_url =
-        std::env::var("CDA_BASE_URL")
-            .unwrap_or_else(|_| {
-                "http://127.0.0.1:20002/vehicle/v15".to_string()
-            });
-
-    let cda_component_id =
-        std::env::var("CDA_COMPONENT_ID")
-            .unwrap_or_else(|_| {
-                "az3166".to_string()
-            });
-
-    let cda_service_id =
-        std::env::var("CDA_SERVICE_ID")
-            .unwrap_or_else(|_| {
-                "window-position".to_string()
-            });
-
-    let cda_client_id =
-        std::env::var("CDA_CLIENT_ID")
-            .unwrap_or_else(|_| {
-                "test".to_string()
-            });
-
-    let cda_client_secret =
-        std::env::var("CDA_CLIENT_SECRET")
-            .unwrap_or_else(|_| {
-                "test".to_string()
-            });
+    std::env::var("CDA_BASE_URL")
+        .unwrap_or_else(|_| {
+            "http://127.0.0.1:20002/vehicle/v15"
+                .to_string()
+        });
 
     println!(
         "[ACTUATOR] CDA base URL: {}",
         cda_base_url
     );
 
-    println!(
-        "[ACTUATOR] CDA component: {}",
-        cda_component_id
-    );
-
-    println!(
-        "[ACTUATOR] CDA service: {}",
-        cda_service_id
-    );
-
-    println!(
-        "[ACTUATOR] CDA client ID: {}",
-        cda_client_id
-    );
-
-    println!(
-        "[ACTUATOR] CDA authentication: client credentials configured"
-    );
-
     let sovd_client =
         Arc::new(
             SovdClient::new(
-                cda_base_url,
-                cda_component_id,
-                cda_service_id,
-                &cda_client_id,
-                &cda_client_secret,
-            )
-            .await?
+                cda_base_url
+            )?
         );
 
     // ========================================================
@@ -783,22 +684,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //
     // Guardian's reply URI.
     //
-    let source_filter = UUri::try_from(GUARDIAN_REPLY)?;
+    let source_filter =
+        UUri::try_from(
+            GUARDIAN_REPLY
+        )?;
+
 
     // Sink:
     //
     // The RPC method that this actuator implements.
     //
-    let sink_filter = UUri::try_from(SET_WINDOW_POSITION)?;
+    let sink_filter =
+        UUri::try_from(
+            SET_WINDOW_POSITION
+        )?;
+
 
     // ========================================================
     // CREATE LISTENER
     // ========================================================
 
-    let listener = Arc::new(ActuatorListener {
-    transport: transport.clone(),
-    sovd_client: sovd_client.clone(),
-    });
+    let listener =
+    Arc::new(
+        ActuatorListener {
+            transport: transport.clone(),
+            sovd_client:
+                sovd_client.clone(),
+        }
+    );
 
     // ========================================================
     // REGISTER RPC LISTENER
@@ -819,52 +732,87 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //
 
     transport
-        .register_listener(&source_filter, Some(&sink_filter), listener)
+        .register_listener(
+            &source_filter,
+            Some(&sink_filter),
+            listener,
+        )
         .await?;
 
-    println!("[ACTUATOR] ✓ RPC listener registered.");
+
+    println!(
+        "[ACTUATOR] ✓ RPC listener registered."
+    );
 
     println!();
 
-    println!("  Source:");
+    println!(
+        "  Source:"
+    );
 
-    println!("    {}", GUARDIAN_REPLY);
+    println!(
+        "    {}",
+        GUARDIAN_REPLY
+    );
 
     println!();
 
-    println!("  Sink:");
+    println!(
+        "  Sink:"
+    );
 
-    println!("    {}", SET_WINDOW_POSITION);
+    println!(
+        "    {}",
+        SET_WINDOW_POSITION
+    );
 
     println!();
+
 
     // ========================================================
     // READY
     // ========================================================
 
-    println!("==============================================");
+    println!(
+        "=============================================="
+    );
 
-    println!(" ACTUATOR READY");
+    println!(
+        " ACTUATOR READY"
+    );
 
-    println!("==============================================");
+    println!(
+        "=============================================="
+    );
 
-    println!("Waiting for window RPC requests...");
+    println!(
+        "Waiting for window RPC requests..."
+    );
 
     println!();
+
 
     // ========================================================
     // KEEP PROCESS ALIVE
     // ========================================================
 
-    tokio::signal::ctrl_c().await?;
+    tokio::signal::ctrl_c()
+        .await?;
+
 
     println!();
 
-    println!("==============================================");
+    println!(
+        "=============================================="
+    );
 
-    println!(" Actuation Adapter shutting down.");
+    println!(
+        " Actuation Adapter shutting down."
+    );
 
-    println!("==============================================");
+    println!(
+        "=============================================="
+    );
 
     Ok(())
 }
